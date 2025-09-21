@@ -1,0 +1,188 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Updated to Exora dark theme color system */
+  --background: #1a1f2e;
+  --foreground: #ffffff;
+  --card: #2c3e50;
+  --card-foreground: #ffffff;
+  --popover: #2c3e50;
+  --popover-foreground: #ffffff;
+  --primary: #3498db;
+  --primary-foreground: #ffffff;
+  --secondary: #34495e;
+  --secondary-foreground: #ffffff;
+  --muted: #34495e;
+  --muted-foreground: #95a5a6;
+  --accent: #f39c12;
+  --accent-foreground: #ffffff;
+  --destructive: #e74c3c;
+  --destructive-foreground: #ffffff;
+  --border: #34495e;
+  --input: #34495e;
+  --ring: #3498db;
+  --chart-1: #3498db;
+  --chart-2: #2ecc71;
+  --chart-3: #e74c3c;
+  --chart-4: #f39c12;
+  --chart-5: #9b59b6;
+  --radius: 0.5rem;
+  --sidebar: #2c3e50;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #3498db;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #34495e;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #34495e;
+  --sidebar-ring: #3498db;
+
+  /* Added Exora-specific color variables */
+  --exora-dark: #1a1f2e;
+  --exora-card: #2c3e50;
+  --exora-blue: #3498db;
+  --exora-orange: #f39c12;
+  --exora-green: #2ecc71;
+  --exora-red: #e74c3c;
+  --exora-gray: #95a5a6;
+  --exora-muted: #7f8c8d;
+}
+
+.dark {
+  --background: #1a1f2e;
+  --foreground: #ffffff;
+  --card: #2c3e50;
+  --card-foreground: #ffffff;
+  --popover: #2c3e50;
+  --popover-foreground: #ffffff;
+  --primary: #3498db;
+  --primary-foreground: #ffffff;
+  --secondary: #34495e;
+  --secondary-foreground: #ffffff;
+  --muted: #34495e;
+  --muted-foreground: #95a5a6;
+  --accent: #f39c12;
+  --accent-foreground: #ffffff;
+  --destructive: #e74c3c;
+  --destructive-foreground: #ffffff;
+  --border: #34495e;
+  --input: #34495e;
+  --ring: #3498db;
+  --chart-1: #3498db;
+  --chart-2: #2ecc71;
+  --chart-3: #e74c3c;
+  --chart-4: #f39c12;
+  --chart-5: #9b59b6;
+  --sidebar: #2c3e50;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #3498db;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #34495e;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #34495e;
+  --sidebar-ring: #3498db;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Added Exora theme colors to Tailwind */
+  --color-exora-dark: var(--exora-dark);
+  --color-exora-card: var(--exora-card);
+  --color-exora-blue: var(--exora-blue);
+  --color-exora-orange: var(--exora-orange);
+  --color-exora-green: var(--exora-green);
+  --color-exora-red: var(--exora-red);
+  --color-exora-gray: var(--exora-gray);
+  --color-exora-muted: var(--exora-muted);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Added custom scrollbar styling for dark theme */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--exora-card);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--exora-gray);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--exora-blue);
+  }
+}
+
+/* Added custom utility classes for Exora theme */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  .gradient-chart {
+    background: linear-gradient(180deg, var(--exora-blue) 0%, transparent 100%);
+  }
+
+  .gradient-positive {
+    background: linear-gradient(180deg, var(--exora-green) 0%, transparent 100%);
+  }
+
+  .gradient-negative {
+    background: linear-gradient(180deg, var(--exora-red) 0%, transparent 100%);
+  }
+}
