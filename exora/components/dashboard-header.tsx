@@ -1,8 +1,8 @@
 "use client"
 import { ExoraLogo } from "./exora-logo"
-import { Button } from "./ui/button"
-import { Input } from "./ui/input"
-import { Avatar, AvatarFallback } from "./ui/avatar"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Settings, Download, RefreshCw, Search, Filter, X } from "lucide-react"
 
 interface DashboardHeaderProps {

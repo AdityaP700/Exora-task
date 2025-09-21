@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "./ui/button"
-import { Input } from "./ui/input"
-import { Card } from "./ui/card"
-import { Badge } from "./ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { MessageCircle, Save, Share, TrendingUp, Zap, Send, Sparkles } from "lucide-react"
 
 export function AISidekickChat() {
