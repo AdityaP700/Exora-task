@@ -2,9 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-service'; 
-import { fetchMentions, fetchSignals, fetchHistoricalData } from '@/lib/exa-service';
+import { fetchExaData, fetchHistoricalData } from '@/lib/exa-service';
 import { calculateNarrativeMomentum, calculatePulseIndex } from '@/lib/analysis-service';
-import { BriefingResponse, EventType } from '@/lib/types';
+import { BriefingResponse, EventType, CompanyProfile, FounderInfo } from '@/lib/types';
 
 // --- HELPER FUNCTIONS ---
 
@@ -151,18 +151,34 @@ export async function GET(request: Request) {
     const [groqTlDr, competitors] = await Promise.all([groqTlDrPromise, competitorsPromise]);
     const allDomains = [domain, ...competitors];
 
+    // --- Step 2: Additional LLM metadata (Company Profile, Founders) ---
+    const profilePrompt = `Provide a concise profile for the company at "${domain}".
+Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public"|"Private"|"Unknown"), socials (object with linkedin, twitter, facebook URLs).`;
+    const foundersPrompt = `Who are the key founders of the company at "${domain}"? Return ONLY a valid JSON array of objects, each with fields: name, linkedin, twitter.`;
+
+    const companyProfilePromise = safeGenerateJson<CompanyProfile>(profilePrompt, llmProviders)
+      .catch(() => ({ name: domain.split('.')[0], domain, description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} } as CompanyProfile));
+    const founderInfoPromise = safeGenerateJson<FounderInfo[]>(foundersPrompt, llmProviders)
+      .catch(() => []);
+
     // --- Step 3: Combined Data Fetch with Historical Data ---
     console.log(`📋 Fetching comprehensive data for domains: ${allDomains.join(', ')}`);
     
-    const [mentionsResults, signalsResults, historicalDataResults] = await Promise.allSettled([
-        Promise.all(allDomains.map((d, i) => new Promise(resolve => setTimeout(resolve, i * 250)).then(() => fetchMentions(d, exaApiKey)))),
-        fetchSignals(domain, exaApiKey),
-        Promise.all(allDomains.map(d => fetchHistoricalData(d, exaApiKey))) // This is slow, but necessary for V1
+    const [mentionsResults, signalsResults, historicalDataResults, profileResult, foundersResult] = await Promise.allSettled([
+        Promise.all(
+          allDomains.map((d, i) => new Promise(resolve => setTimeout(resolve, i * 250)).then(() => fetchExaData(d, 'mentions', exaApiKey)))
+        ),
+        fetchExaData(domain, 'signals', exaApiKey),
+        Promise.all(allDomains.map(d => fetchHistoricalData(d, exaApiKey))), // This is slow, but necessary for V1
+        companyProfilePromise,
+        founderInfoPromise
     ]);
 
-    const allMentions = (mentionsResults.status === 'fulfilled') ? mentionsResults.value : allDomains.map(() => ({ results: [] }));
-    const primarySignals = (signalsResults.status === 'fulfilled') ? signalsResults.value : { results: [] };
-    const allHistoricalData = (historicalDataResults.status === 'fulfilled') ? historicalDataResults.value : allDomains.map(() => []);
+  const allMentions = (mentionsResults.status === 'fulfilled') ? mentionsResults.value : allDomains.map(() => ({ results: [] }));
+  const primarySignals = (signalsResults.status === 'fulfilled') ? signalsResults.value : { results: [] };
+  const allHistoricalData = (historicalDataResults.status === 'fulfilled') ? historicalDataResults.value : allDomains.map(() => []);
+  const companyProfile = (profileResult.status === 'fulfilled') ? profileResult.value as CompanyProfile : { name: domain.split('.')[0], domain, description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} } as CompanyProfile;
+  const founderInfo = (foundersResult.status === 'fulfilled') ? foundersResult.value as FounderInfo[] : [];
 
     console.log(`📋 Final data summary: mentions=${allMentions.map((m, i) => `${allDomains[i]}:${m.results?.length || 0}`).join(', ')}, historical=${allHistoricalData.map((h, i) => `${allDomains[i]}:${h?.length || 0}`).join(', ')}`);
 
@@ -175,30 +191,37 @@ export async function GET(request: Request) {
     );
     
     // --- Step 4b: Event Log Processing ---
-    const allRawSignals = (primarySignals.results || []);
+  const allRawSignals = (primarySignals.results || []);
     const relevantSignals = allRawSignals.filter((signal: any) => signal.title && isRelevantToCompany(signal.title, domain));
     const classifiedEvents = await Promise.all(
         relevantSignals.map(async (signal: any) => ({
             date: signal.publishedDate || new Date().toISOString(),
             headline: signal.title || 'N/A',
             type: await classifyEventType(signal.title, groqApiKey ?? undefined, openAiApiKey ?? undefined),
+      url: signal.url || ''
         }))
     );
-    const finalEventLog = classifiedEvents.filter(event => event.type !== "Other");
+  const finalEventLog = classifiedEvents; // keep 'Other' as well to enrich news feed
 
     // --- Step 4c: Calculate Final Benchmark Matrix (Now with Historical Data) ---
-    const benchmarkMatrix = allDomains.map((d, i) => {
+  const benchmarkMatrix = allDomains.map((d, i) => {
         const mentions = allMentions[i]?.results || [];
         const narrativeMomentum = calculateNarrativeMomentum(mentions);
         const sentimentScore = sentimentScores[i];
         const pulseIndex = calculatePulseIndex(narrativeMomentum, sentimentScore);
-        return { 
-            domain: d, 
-            pulseIndex, 
-            narrativeMomentum, 
-            sentimentScore,
-            historicalData: allHistoricalData[i] || [] // <-- ADD THIS
-        };
+    const topNews = (mentions || []).slice(0, 3).map((m: any) => ({
+      headline: m.title || 'N/A',
+      url: m.url || '#',
+      source: m.domain || 'unknown'
+    }));
+    return { 
+      domain: d, 
+      pulseIndex, 
+      narrativeMomentum, 
+      sentimentScore,
+      historicalData: allHistoricalData[i] || [],
+      news: topNews
+    };
     });
 
     // --- Step 5: AI Strategic Synthesis ---
@@ -218,21 +241,17 @@ export async function GET(request: Request) {
     }
 
     // --- Step 6: Bundle Response ---
-    const response: BriefingResponse = {
-        requestDomain: domain,
-        executiveCard: {
-            pulseIndex: benchmarkMatrix[0]?.pulseIndex || 50,
-            narrativeMomentum: benchmarkMatrix[0]?.narrativeMomentum || 0,
-            sentimentScore: benchmarkMatrix[0]?.sentimentScore || 50,
-            keyMetrics: {},
-        },
-        benchmarkMatrix,
-        eventLog: finalEventLog,
-        aiSummary: {
-            summary: summaryPoints,
-            groqTlDr,
-        },
-    };
+  const response: BriefingResponse = {
+    requestDomain: domain,
+    companyProfile: { ...companyProfile, domain },
+    founderInfo,
+    benchmarkMatrix,
+    newsFeed: finalEventLog,
+    aiSummary: {
+      summary: summaryPoints,
+      groqTlDr,
+    },
+  };
 
     return NextResponse.json(response);
 

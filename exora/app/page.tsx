@@ -9,7 +9,11 @@ import { Navbar } from "@/components/layouts/navbar"; // The stunning navbar
 import { AllInvestorView } from "@/components/all-investor-view";
 import { TrendAnalysisView } from "@/components/trend-analysis-view";
 import { AISidekickChat } from "@/components/ai-sidekick-chat";
+import { CompanyOverviewCard } from "@/components/company-overview-card";
+import { NewsFeed } from "@/components/news-feed";
+import { CompetitorNews } from "@/components/competitor-news";
 import { AIInputWithSearch } from "@/components/ui/ai-input-with-search";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { BriefingResponse } from "@/lib/types";
 import { Badge } from '@/components/ui/badge';
 import { ArrowUp } from 'lucide-react';
@@ -86,26 +90,41 @@ export default function ExoraPage() {
             ) : briefingData ? (
               // --- THE RESULTS DASHBOARD VIEW ---
               <motion.div key="data" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div className="container mx-auto px-4 mt-10">
-                  {/* Tab Navigation for the Results */}
-                   <div className="border-b border-slate-700/50 mb-6">
-                        <nav className="flex gap-8">
-                            <button onClick={() => setActiveTab('all-investor')} className={`py-2 px-1 text-sm font-medium transition-colors ${activeTab === 'all-investor' ? 'text-white border-b-2 border-blue-500' : 'text-slate-400 hover:text-white'}`}>
-                                All Investor View
-                            </button>
-                            <button onClick={() => setActiveTab('trend-analysis')} className={`py-2 px-1 text-sm font-medium transition-colors ${activeTab === 'trend-analysis' ? 'text-white border-b-2 border-blue-500' : 'text-slate-400 hover:text-white'}`}>
-                                Trend Analysis
-                            </button>
-                        </nav>
+                <div className="container mx-auto px-4 mt-24">
+                  {/* Persistent Search at the top */}
+                  <div className="w-full max-w-3xl mx-auto">
+                    <AIInputWithSearch
+                      placeholder="Enter a company URL to analyze... (e.g., perplexity.ai)"
+                      onSubmit={(value) => handleSearch(value)}
+                    />
+                  </div>
+
+                  {/* Two-column briefing document */}
+                  <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Left column: Company overview & summary */}
+                    <div className="lg:col-span-1 space-y-6">
+                      <CompanyOverviewCard profile={briefingData.companyProfile} founders={briefingData.founderInfo} />
+                      <AISidekickChat data={briefingData.aiSummary} />
                     </div>
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Right column: News */}
+                    <div className="lg:col-span-2 space-y-6">
+                      <NewsFeed title="Latest Company News" items={briefingData.newsFeed} />
+                      <CompetitorNews competitors={briefingData.benchmarkMatrix} />
+                    </div>
+                  </div>
+
+                  {/* View toggle for comparisons & charts */}
+                  <div className="mt-10 flex items-center justify-center">
+                    <ToggleGroup value={activeTab} onValueChange={(v) => v && setActiveTab(v)}>
+                      <ToggleGroupItem value="all-investor" aria-label="All Investor View">Comparison</ToggleGroupItem>
+                      <ToggleGroupItem value="trend-analysis" aria-label="Trend Analysis">Charts</ToggleGroupItem>
+                    </ToggleGroup>
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2 space-y-6">
                       {activeTab === "all-investor" && <AllInvestorView data={briefingData} />}
                       {activeTab === "trend-analysis" && <TrendAnalysisView data={briefingData} />}
-                    </div>
-                    <div className="lg:col-span-1">
-                      <AISidekickChat data={briefingData.aiSummary} />
                     </div>
                   </div>
                 </div>
@@ -115,12 +134,7 @@ export default function ExoraPage() {
               <motion.div key="search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <div className="container mx-auto px-4 pt-32 pb-24 text-center flex flex-col items-center">
                     <div className="flex justify-center gap-4 mb-8">
-                        <Badge variant="outline" className="border-slate-700 bg-slate-900/50 backdrop-blur-sm py-2 px-4 text-slate-300">
-                            Live on Peerlist Launchpad <ArrowUp className="w-4 h-4 ml-2"/>
-                        </Badge>
-                        <Badge variant="outline" className="border-slate-700 bg-slate-900/50 backdrop-blur-sm py-2 px-4 text-slate-300">
-                            Featured on Product Hunt <ArrowUp className="w-4 h-4 ml-2"/>
-                        </Badge>
+                        
                     </div>
 
                     <h1 className="text-5xl md:text-7xl font-bold text-slate-50 tracking-tight">
@@ -136,11 +150,11 @@ export default function ExoraPage() {
                       Transform any company URL into comprehensive market intelligence. Get competitive benchmarks, sentiment analysis, and AI-powered strategic insights—all in under 30 seconds.
                     </p>
                     
-                    <div className="mt-12 w-full">
-                        <AIInputWithSearch
-                          placeholder="Enter a company URL to begin... (e.g., perplexity.ai)"
-                          onSubmit={(value) => handleSearch(value)}
-                        />
+                    <div className="mt-12 w-full max-w-3xl">
+                      <AIInputWithSearch
+                        placeholder="Enter a company URL to begin... (e.g., perplexity.ai)"
+                        onSubmit={(value) => handleSearch(value)}
+                      />
                     </div>
                 </div>
               </motion.div>

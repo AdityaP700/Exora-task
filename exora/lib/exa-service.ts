@@ -35,6 +35,57 @@ const getPastDate = (days: number): string => {
   return date.toISOString().split('T')[0];
 };
 
+/**
+ * General-purpose, rate-limited Exa fetching for mentions and signals.
+ * Adds a delay before every API call to avoid 429s.
+ */
+export async function fetchExaData(domain: string, type: 'mentions' | 'signals', apiKey: string): Promise<any> {
+  const companyName = domain.split('.')[0];
+  console.log(`🔍 Fetching ${type} for: ${domain}`);
+
+  let queries: string[] = [];
+  if (type === 'mentions') {
+    queries.push(`"${domain}" OR "${companyName}"`);
+  } else {
+    queries = [
+      `"${companyName}" funding OR "${companyName}" raises`,
+      `"${companyName}" launches OR "${companyName}" announces`,
+      `"${companyName}" acquires OR "${companyName}" acquisition`,
+      `"${companyName}" layoffs OR "${companyName}" restructuring`,
+    ];
+  }
+
+  const allResults: any[] = [];
+  for (let i = 0; i < queries.length; i++) {
+    try {
+      // Critical: delay BEFORE each request
+      await delay(250);
+      const result = await exaSearch(apiKey, {
+        query: queries[i],
+        type: 'neural',
+        numResults: type === 'mentions' ? 25 : 8,
+        startPublishedDate: getPastDate(type === 'mentions' ? 14 : 90),
+        includeDomains: type === 'signals'
+          ? ['techcrunch.com', 'wsj.com', 'bloomberg.com', 'forbes.com', 'businessinsider.com']
+          : undefined,
+      });
+      if (result.results) {
+        allResults.push(...result.results);
+      }
+    } catch (error) {
+      console.warn(`Exa query failed for ${domain} (${type}):`, error);
+      continue;
+    }
+  }
+
+  const uniqueResults = allResults
+    .filter((result, index, self) => result.url && index === self.findIndex(r => r.url === result.url))
+    .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
+
+  console.log(`📊 Total ${type} for ${domain}: ${allResults.length} raw → ${uniqueResults.length} unique`);
+  return { results: uniqueResults };
+}
+
 // 🔧 FIXED: Rate-limited mentions fetching
 export async function fetchMentions(domain: string, apiKey: string): Promise<any> {
   const companyName = domain.split('.')[0];

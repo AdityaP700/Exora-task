@@ -102,8 +102,9 @@ const HoverButton = React.forwardRef<HTMLButtonElement, HoverButtonProps>(
         onPointerLeave={handlePointerLeave}
         {...props}
         style={{
-          "--circle-start": "var(--tw-gradient-from, #a0d9f8)",
-          "--circle-end": "var(--tw-gradient-to, #3a5bbf)",
+          ...(props.style as React.CSSProperties),
+          ["--circle-start" as any]: "var(--tw-gradient-from, #a0d9f8)",
+          ["--circle-end" as any]: "var(--tw-gradient-to, #3a5bbf)",
         }}
       >
         {circles.map(({ id, x, y, color, fadeState }) => (
