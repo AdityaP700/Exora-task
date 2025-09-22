@@ -37,3 +37,15 @@ export interface BriefingResponse {
   eventLog: EventLogItem[];
   aiSummary: AiSummaryData;
 }
+export interface HistoricalDataPoint {
+  date: string;
+  mentions: number;
+  // We can add sentiment later for the multi-line chart
+}
+export interface BenchmarkMatrixRow {
+  domain: string;
+  pulseIndex: number;
+  narrativeMomentum: number;
+  sentimentScore: number;
+  historicalData: HistoricalDataPoint[]; // Add historical data to each competitor
+}

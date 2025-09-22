@@ -1,34 +1,51 @@
 // lib/analysis-service.ts
 
-// A simple placeholder for now. In a real app, this would be more sophisticated.
 export function calculatePulseIndex(momentum: number, sentiment: number): number {
-  // Normalize momentum (e.g., cap it at +/- 50%) and sentiment
-  const normMomentum = Math.max(-50, Math.min(50, momentum)) + 50; // Range 0-100
-  return Math.round((normMomentum * 0.6) + (sentiment * 0.4)); // 60% weight on momentum
+  const normMomentum = Math.max(-50, Math.min(50, momentum)) + 50;
+  return Math.round((normMomentum * 0.6) + (sentiment * 0.4));
 }
 
+/**
+ * Calculates narrative momentum with enhanced debugging.
+ */
 export function calculateNarrativeMomentum(results: any[]): number {
-    const now = new Date();
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(now.getDate() - 7);
-    const fourteenDaysAgo = new Date(now);
-    fourteenDaysAgo.setDate(now.getDate() - 14);
+  if (!results) return 0;
+  
+  const now = new Date();
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(now.getDate() - 7);
+  const fourteenDaysAgo = new Date(now);
+  fourteenDaysAgo.setDate(now.getDate() - 14);
 
-    let recentWeekCount = 0;
-    let previousWeekCount = 0;
+  let recentWeekCount = 0;
+  let previousWeekCount = 0;
+  
+  // 🔧 ADDED: Debug logging as you suggested
+  console.log(`📅 Analyzing dates: Recent week (${sevenDaysAgo.toISOString().split('T')[0]} to now), Previous week (${fourteenDaysAgo.toISOString().split('T')[0]} to ${sevenDaysAgo.toISOString().split('T')[0]})`);
 
-    results.forEach(result => {
-        const publishedDate = new Date(result.publishedDate);
-        if (publishedDate >= sevenDaysAgo) {
-            recentWeekCount++;
-        } else if (publishedDate >= fourteenDaysAgo) {
-            previousWeekCount++;
-        }
-    });
+  results.forEach(result => {
+    if (!result.publishedDate) return;
+    const publishedDate = new Date(result.publishedDate);
+    const dateStr = publishedDate.toISOString().split('T')[0];
     
-    if (previousWeekCount === 0) {
-        return recentWeekCount > 0 ? 100 : 0; // Avoid division by zero
+    if (publishedDate >= sevenDaysAgo) {
+      recentWeekCount++;
+      console.log(`📈 Recent: ${result.title?.slice(0, 50)}... (${dateStr})`);
+    } else if (publishedDate >= fourteenDaysAgo) {
+      previousWeekCount++;
+      console.log(`📊 Previous: ${result.title?.slice(0, 50)}... (${dateStr})`);
     }
+  });
+  
+  console.log(`🎯 Momentum calculation: Recent=${recentWeekCount}, Previous=${previousWeekCount}`);
+  
+  if (previousWeekCount === 0) {
+    const momentum = recentWeekCount > 0 ? 100 : 0;
+    console.log(`📈 Final momentum (no previous data): ${momentum}%`);
+    return momentum;
+  }
 
-    return Math.round(((recentWeekCount - previousWeekCount) / previousWeekCount) * 100);
+  const momentum = Math.round(((recentWeekCount - previousWeekCount) / previousWeekCount) * 100);
+  console.log(`📈 Final momentum: ${momentum}%`);
+  return momentum;
 }
