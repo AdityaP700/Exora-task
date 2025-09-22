@@ -1,20 +1,21 @@
 // components/layout/navbar.tsx
-"use client"
+"use client";
 
-import * as React from "react"
-import { motion } from "framer-motion"
-import { Search, Github } from "lucide-react"
-import { HoverButton } from "@/components/ui/hover-button"
+import * as React from "react";
+import { motion } from "framer-motion";
+import { Search, Github } from "lucide-react";
+import { HoverButton } from "@/components/ui/hover-button";
 
 export function Navbar() {
   const navItems = [
     { name: "Search", icon: Search },
-    {name: "GitHub", 
-      icon: Github, 
+    {
+      name: "GitHub",
+      icon: Github,
       href: "https://github.com/AdityaP700/Exora-task",
-      external: true 
+      external: true,
     },
-  ]
+  ];
 
   return (
     <header className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4">
@@ -28,7 +29,9 @@ export function Navbar() {
           {navItems.map((item) => (
             <a
               key={item.name}
-              href="#"
+              href={item.href || "#"}
+              target={item.external ? "_blank" : "_self"}
+              rel={item.external ? "noopener noreferrer" : undefined}
               className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white transition-colors rounded-full hover:bg-slate-800/50"
             >
               <item.icon className="w-4 h-4" />
@@ -36,10 +39,8 @@ export function Navbar() {
             </a>
           ))}
         </nav>
-        <HoverButton className="px-4 py-1.5 text-sm">
-          Try It Now
-        </HoverButton>
+        <HoverButton className="px-4 py-1.5 text-sm">Try It Now</HoverButton>
       </motion.div>
     </header>
-  )
+  );
 }
