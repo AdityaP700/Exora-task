@@ -10,7 +10,6 @@ export function Navbar() {
   const navItems = [
     { name: "Home", icon: Home },
     { name: "Search", icon: Search },
-    { name: "Compare", icon: GitCompareArrows },
     { name: "Readme", icon: BookOpen },
     { name: "GitHub", icon: Github },
   ]

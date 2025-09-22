@@ -107,6 +107,45 @@ async function classifyEventType(title: string, groqKey?: string, openAiKey?: st
   } catch (e) { return "Other"; }
 }
 
+// Optional NewsAPI fallback when Exa is unavailable or returns empty
+async function fetchNewsApiFallback(domain: string, apiKey?: string) {
+  if (!apiKey) return [] as { title: string; url: string; publishedAt: string; source?: { name?: string } }[]
+  const companyName = domain.split('.')[0]
+  const params = new URLSearchParams({
+    q: `${companyName} OR ${domain}`,
+    sortBy: 'publishedAt',
+    language: 'en',
+    pageSize: '12'
+  })
+  const url = `https://newsapi.org/v2/everything?${params.toString()}`
+  try {
+    const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } })
+    if (!res.ok) return []
+    const json = await res.json()
+    return (json.articles || []) as any[]
+  } catch {
+    return []
+  }
+}
+
+// Layer 2: AI "Bouncer" — quick, cheap validation to avoid nonsense inputs
+async function validateDomainIsCompany(domain: string, providers: ProviderConfig[]): Promise<boolean> {
+  const prompt = `Is the website at the domain "${domain}" the primary, official website for a single company, organization, or commercial product? Answer ONLY with a single word: YES or NO.`
+  try {
+    const response = await safeGenerateText(prompt, providers)
+    if (/YES/i.test(response)) {
+      console.log(`✅ Domain validation PASSED for: ${domain}`)
+      return true
+    }
+  } catch (error) {
+    console.warn(`Domain validation LLM call failed for ${domain}:`, error)
+    // Graceful: if the validator fails, allow downstream best-effort
+    return true
+  }
+  console.log(`❌ Domain validation FAILED for: ${domain}`)
+  return false
+}
+
 // --- MAIN API ENDPOINT ---
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -117,6 +156,7 @@ export async function GET(request: Request) {
   const groqApiKey = process.env.GROQ_API_KEY;
   const openAiApiKey = process.env.OPENAI_API_KEY;
   const geminiApiKey = process.env.GEMINI_API_KEY;
+  const newsApiKey = process.env.NEWS_API_KEY;
 
   if (!rawDomain) {
     return NextResponse.json({ error: 'Missing domain parameter' }, { status: 400 });
@@ -139,9 +179,18 @@ export async function GET(request: Request) {
           { provider: 'gemini', apiKey: geminiApiKey }
       ];
 
+    // --- NEW: Layer 2 - The AI Bouncer ---
+    const isCompany = await validateDomainIsCompany(domain, groqProviders)
+    if (!isCompany) {
+      return NextResponse.json({
+        error: 'Invalid Input',
+        details: `The provided URL "${domain}" does not appear to be a primary company website. Please try a different domain.`
+      }, { status: 400 })
+    }
+
 
     // --- Step 1: Improved Groq TL;DR ---
-    const groqTlDrPrompt = `What is the company at the domain "${domain}"? Provide a brief, factual description of what they do in one sentence. If you're not familiar with this specific company, make a reasonable inference based on the domain name and provide a general business description.`;
+  const groqTlDrPrompt = `What is the company at the domain "${domain}"? Provide a brief, factual description of what they do in one sentence. If you're not familiar with this specific company, make a reasonable inference based on the domain name and provide a general business description.`;
     const groqTlDrPromise = safeGenerateText(groqTlDrPrompt, groqProviders)
       .catch(() => `Company analysis for ${domain}`);
     
@@ -166,7 +215,10 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
     
     const [mentionsResults, signalsResults, historicalDataResults, profileResult, foundersResult] = await Promise.allSettled([
         Promise.all(
-          allDomains.map((d, i) => new Promise(resolve => setTimeout(resolve, i * 250)).then(() => fetchExaData(d, 'mentions', exaApiKey)))
+          allDomains.map((d, i) => new Promise(resolve => setTimeout(resolve, i * 250)).then(() => {
+            const limit = i === 0 ? 15 : 8; // main company richer, competitors lighter
+            return fetchExaData(d, 'mentions', exaApiKey, { numResults: limit })
+          }))
         ),
         fetchExaData(domain, 'signals', exaApiKey),
         Promise.all(allDomains.map(d => fetchHistoricalData(d, exaApiKey))), // This is slow, but necessary for V1
@@ -180,52 +232,141 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
   const companyProfile = (profileResult.status === 'fulfilled') ? profileResult.value as CompanyProfile : { name: domain.split('.')[0], domain, description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} } as CompanyProfile;
   const founderInfo = (foundersResult.status === 'fulfilled') ? foundersResult.value as FounderInfo[] : [];
 
-    console.log(`📋 Final data summary: mentions=${allMentions.map((m, i) => `${allDomains[i]}:${m.results?.length || 0}`).join(', ')}, historical=${allHistoricalData.map((h, i) => `${allDomains[i]}:${h?.length || 0}`).join(', ')}`);
+    // If Exa mentions are empty, try NewsAPI fallback per domain
+    const enhancedMentions = await Promise.all(allDomains.map(async (d, i) => {
+      const cur = allMentions[i]?.results || []
+      if (cur.length > 0) return { results: cur }
+      if (!newsApiKey) return { results: [] }
+      const articles = await fetchNewsApiFallback(d, newsApiKey)
+      const mapped = articles.map((a: any) => ({
+        title: a.title,
+        url: a.url,
+        domain: a.source?.name || 'news',
+        publishedDate: a.publishedAt
+      }))
+      return { results: mapped }
+    }))
+
+    console.log(`📋 Final data summary: mentions=${enhancedMentions.map((m, i) => `${allDomains[i]}:${m.results?.length || 0}`).join(', ')}, historical=${allHistoricalData.map((h, i) => `${allDomains[i]}:${h?.length || 0}`).join(', ')}`);
 
     // --- Step 4a: Real Sentiment Analysis ---
     const sentimentScores = await Promise.all(
-        allMentions.map(mention => {
-            const headlines = (mention.results || []).slice(0, 5).map((m: any) => m.title || '');
-            return getSentimentScore(headlines, groqApiKey ?? undefined, openAiApiKey ?? undefined);
-        })
+      enhancedMentions.map(mention => {
+        const headlines = (mention.results || []).slice(0, 5).map((m: any) => m.title || '');
+        return getSentimentScore(headlines, groqApiKey ?? undefined, openAiApiKey ?? undefined);
+      })
     );
     
-    // --- Step 4b: Event Log Processing ---
-  const allRawSignals = (primarySignals.results || []);
-    const relevantSignals = allRawSignals.filter((signal: any) => signal.title && isRelevantToCompany(signal.title, domain));
-    const classifiedEvents = await Promise.all(
-        relevantSignals.map(async (signal: any) => ({
-            date: signal.publishedDate || new Date().toISOString(),
-            headline: signal.title || 'N/A',
-            type: await classifyEventType(signal.title, groqApiKey ?? undefined, openAiApiKey ?? undefined),
-      url: signal.url || ''
-        }))
-    );
-  const finalEventLog = classifiedEvents; // keep 'Other' as well to enrich news feed
+    // --- Step 4b: Event Log Processing with fallback ---
+    const allRawSignals = (primarySignals.results || []);
+    // Start with strict relevance; if we got too few, relax the filter
+    let relevantSignals = allRawSignals.filter((s: any) => s.title && isRelevantToCompany(s.title, domain));
+    if (relevantSignals.length < 3) {
+      relevantSignals = allRawSignals.filter((s: any) => !!s.title);
+    }
 
-    // --- Step 4c: Calculate Final Benchmark Matrix (Now with Historical Data) ---
-  const benchmarkMatrix = allDomains.map((d, i) => {
-        const mentions = allMentions[i]?.results || [];
-        const narrativeMomentum = calculateNarrativeMomentum(mentions);
-        const sentimentScore = sentimentScores[i];
-        const pulseIndex = calculatePulseIndex(narrativeMomentum, sentimentScore);
-    const topNews = (mentions || []).slice(0, 3).map((m: any) => ({
-      headline: m.title || 'N/A',
-      url: m.url || '#',
-      source: m.domain || 'unknown'
-    }));
-    return { 
-      domain: d, 
-      pulseIndex, 
-      narrativeMomentum, 
-      sentimentScore,
-      historicalData: allHistoricalData[i] || [],
-      news: topNews
-    };
+    let finalEventLog;
+    if (relevantSignals.length > 0) {
+      const classifiedEvents = await Promise.all(
+        relevantSignals.slice(0, 12).map(async (signal: any) => ({
+          date: signal.publishedDate || new Date().toISOString(),
+          headline: signal.title || 'N/A',
+          type: await classifyEventType(signal.title, groqApiKey ?? undefined, openAiApiKey ?? undefined),
+          url: signal.url || ''
+        }))
+      );
+      finalEventLog = classifiedEvents;
+    } else {
+      // Fallback: build news from primary mentions
+      const primaryMentions = (enhancedMentions[0]?.results || []) as any[];
+      finalEventLog = primaryMentions.slice(0, 12).map((m: any) => ({
+        date: m.publishedDate || new Date().toISOString(),
+        headline: m.title || 'N/A',
+        type: 'Other' as const,
+        url: m.url || '#'
+      }));
+    }
+
+    // --- Step 4c: Calculate Final Benchmark Matrix (Optimized News Fetching) ---
+    const benchmarkMatrix = allDomains.map((d, i) => {
+      const mentions = enhancedMentions[i]?.results || [];
+      const narrativeMomentum = calculateNarrativeMomentum(mentions);
+      const sentimentScore = sentimentScores[i];
+      const pulseIndex = calculatePulseIndex(narrativeMomentum, sentimentScore);
+
+      let topNews: any[];
+      if (i === 0) {
+        // Main company: Get 3 latest news
+        topNews = (mentions || [])
+          .slice(0, 3)
+          .map((m: any) => ({
+            headline: m.title || 'N/A',
+            url: m.url || '#',
+            source: m.domain || 'unknown',
+            publishedDate: m.publishedDate,
+          }));
+      } else {
+        // Competitors: store all, filter later to a global cap
+        topNews = (mentions || []).map((m: any) => ({
+          headline: m.title || 'N/A',
+          url: m.url || '#',
+          source: m.domain || 'unknown',
+          publishedDate: m.publishedDate,
+          domain: d,
+        }));
+      }
+
+      return {
+        domain: d,
+        pulseIndex,
+        narrativeMomentum,
+        sentimentScore,
+        historicalData: allHistoricalData[i] || [],
+        news: topNews,
+      };
+    });
+
+    // Collect and limit competitor news to max 4 total (most recent first)
+    const allCompetitorNews = benchmarkMatrix
+      .slice(1)
+      .flatMap((company: any) => company.news)
+      .filter((news: any) => news.headline !== 'N/A')
+      .sort((a: any, b: any) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
+      .slice(0, 4);
+
+    // Update competitor entries with limited news
+    benchmarkMatrix.forEach((company: any, i: number) => {
+      if (i > 0) {
+        const companyNews = allCompetitorNews.filter((news: any) => news.domain === company.domain);
+        company.news = companyNews;
+      }
     });
 
     // --- Step 5: AI Strategic Synthesis ---
-    const superPrompt = `You are a VC analyst. Based on this data, provide exactly 3 bullet points for a strategic summary for "${domain}".\n\nData: ${JSON.stringify(benchmarkMatrix, null, 2)}\n\nFormat: Return each point on a new line starting with "• ".`;
+const superPrompt = `EXECUTIVE BRIEF: Strategic Analysis for ${domain}
+
+You are preparing a board-level strategic assessment. The data below represents real-time competitive intelligence across key market players. Your analysis will inform strategic planning and potential investment decisions.
+
+COMPETITIVE INTELLIGENCE:
+${JSON.stringify(benchmarkMatrix, null, 2)}
+
+STRATEGIC ANALYSIS DIRECTIVE:
+Synthesize this data into exactly 3 executive-level insights focusing on:
+
+1. COMPETITIVE POSITIONING: Where does ${domain} stand relative to key competitors? What does the data reveal about market share momentum, brand strength, and competitive moats?
+
+2. MARKET DYNAMICS: What do the sentiment and momentum differentials indicate about industry trends, consumer preferences, and emerging opportunities?
+
+3. STRATEGIC PRIORITIES: Based on the competitive landscape, what should be the top strategic focus to strengthen market position?
+
+REQUIREMENTS:
+- Be specific with metrics and comparisons
+- Focus on strategic implications, not data summaries  
+- Include both opportunities and risks
+- Write for senior executives who make strategic decisions
+- Each point should be actionable and forward-looking
+
+OUTPUT: 3 bullet points, each starting with "• ", maximum 40 words each.`;
     const summaryResponse = await safeGenerateText(
         superPrompt,
         [

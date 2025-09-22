@@ -45,14 +45,41 @@ export function SummaryView({ data }: Props) {
         <Card className="p-4 space-y-3">
           <div className="text-sm font-medium text-foreground">Export</div>
           <div className="flex gap-2">
-            <Button variant="secondary" className="gap-2" disabled>
-              <FileDown className="w-4 h-4" /> PDF (soon)
+            <Button
+              variant="secondary"
+              className="gap-2"
+              onClick={() => {
+                // Simple, reliable print-to-PDF
+                if (typeof window !== 'undefined') window.print()
+              }}
+            >
+              <FileDown className="w-4 h-4" /> PDF
             </Button>
-            <Button variant="secondary" className="gap-2" disabled>
-              <Share2 className="w-4 h-4" /> Share (soon)
+            <Button
+              variant="secondary"
+              className="gap-2"
+              onClick={async () => {
+                try {
+                  const shareData = {
+                    title: 'Exora Briefing',
+                    text: 'Quick briefing summary',
+                    url: typeof window !== 'undefined' ? window.location.href : ''
+                  }
+                  if (navigator.share) {
+                    await navigator.share(shareData as any)
+                  } else if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(shareData.url)
+                    alert('Link copied to clipboard')
+                  }
+                } catch (e) {
+                  console.warn('Share failed:', e)
+                }
+              }}
+            >
+              <Share2 className="w-4 h-4" /> Share
             </Button>
           </div>
-          <div className="text-xs text-muted-foreground">Exports are placeholders for now.</div>
+          <div className="text-xs text-muted-foreground">Use your browser’s “Save as PDF” in the print dialog.</div>
         </Card>
       </div>
     </div>

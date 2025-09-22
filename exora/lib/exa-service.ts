@@ -39,7 +39,12 @@ const getPastDate = (days: number): string => {
  * General-purpose, rate-limited Exa fetching for mentions and signals.
  * Adds a delay before every API call to avoid 429s.
  */
-export async function fetchExaData(domain: string, type: 'mentions' | 'signals', apiKey: string): Promise<any> {
+export async function fetchExaData(
+  domain: string,
+  type: 'mentions' | 'signals',
+  apiKey: string,
+  options?: { numResults?: number }
+): Promise<any> {
   const companyName = domain.split('.')[0];
   console.log(`🔍 Fetching ${type} for: ${domain}`);
 
@@ -63,7 +68,7 @@ export async function fetchExaData(domain: string, type: 'mentions' | 'signals',
       const result = await exaSearch(apiKey, {
         query: queries[i],
         type: 'neural',
-        numResults: type === 'mentions' ? 25 : 8,
+        numResults: type === 'mentions' ? (options?.numResults ?? 25) : 8,
         startPublishedDate: getPastDate(type === 'mentions' ? 14 : 90),
         includeDomains: type === 'signals'
           ? ['techcrunch.com', 'wsj.com', 'bloomberg.com', 'forbes.com', 'businessinsider.com']

@@ -1,85 +1,66 @@
-"use client"
+// components/company-overview-card.tsx
+"use client";
 
-import { Card } from "@/components/ui/card"
-import { Github, Linkedin, Twitter, Globe, Building2, BadgeDollarSign } from "lucide-react"
-import type { CompanyProfile, FounderInfo } from "@/lib/types"
-import Link from "next/link"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Linkedin, Twitter, Globe } from "lucide-react";
+import type { CompanyProfile, FounderInfo } from "@/lib/types";
+import Link from "next/link";
 
 export function CompanyOverviewCard({ profile, founders }: { profile: CompanyProfile; founders: FounderInfo[] }) {
-  const displayDomain = profile.domain?.replace(/^https?:\/\//, "").replace(/^www\./, "")
+  const displayDomain = profile.domain?.replace(/^https?:\/\//, "").replace(/^www\./, "");
+  
   return (
-    <Card className="p-6 bg-card border-border">
-      <div className="flex items-start gap-4">
-        <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center text-xl font-semibold">
-          {profile.name?.[0]?.toUpperCase()}
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">{profile.name || displayDomain}</h2>
-            <span className="text-xs px-2 py-1 rounded-full border border-border text-muted-foreground">
-              {profile.ipoStatus === 'Public' ? 'Public' : profile.ipoStatus === 'Private' ? 'Private' : 'Unknown'}
-            </span>
+    <Card className="bg-card border-border shadow-lg">
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="text-2xl font-bold text-slate-50">{profile.name}</CardTitle>
+            <CardDescription className="text-cyan-400">{displayDomain}</CardDescription>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">{profile.description}</p>
+          {profile.ipoStatus === 'Public' && <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20">Public</Badge>}
         </div>
-      </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-slate-400 mb-6">{profile.description}</p>
+        
+        <div className="flex items-center gap-2 mb-6">
+          {profile.socials?.linkedin && <SocialButton href={profile.socials.linkedin} icon={Linkedin} />}
+          {profile.socials?.twitter && <SocialButton href={profile.socials.twitter} icon={Twitter} />}
+          <div className="flex-grow" />
+          <Button variant="ghost" asChild>
+            <Link href={`https://${displayDomain}`} target="_blank" className="text-slate-400 hover:text-cyan-400 flex items-center gap-2">
+              <Globe className="w-4 h-4" /> Website
+            </Link>
+          </Button>
+        </div>
 
-      {/* Socials */}
-      <div className="mt-4 flex items-center gap-3">
-        {profile.socials?.linkedin && (
-          <Link href={profile.socials.linkedin} target="_blank" className="text-slate-300 hover:text-white">
-            <Linkedin className="w-4 h-4" />
-          </Link>
-        )}
-        {profile.socials?.twitter && (
-          <Link href={profile.socials.twitter} target="_blank" className="text-slate-300 hover:text-white">
-            <Twitter className="w-4 h-4" />
-          </Link>
-        )}
-        {profile.socials?.facebook && (
-          <Link href={profile.socials.facebook} target="_blank" className="text-slate-300 hover:text-white">
-            <Github className="w-4 h-4" />
-          </Link>
-        )}
-        <Link href={`https://${displayDomain}`} target="_blank" className="text-slate-300 hover:text-white ml-auto flex items-center gap-1 text-xs">
-          <Globe className="w-3 h-3" />
-          {displayDomain}
-        </Link>
-      </div>
-
-      {/* Founders */}
-      {founders?.length > 0 && (
-        <div className="mt-6">
-          <div className="text-sm font-medium text-foreground mb-2">Founders</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {founders.map((f, i) => (
-              <div key={i} className="flex items-center justify-between rounded-md border border-border p-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs">
-                    {f.name?.split(' ').map(p => p[0]).join('').slice(0,2).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="text-sm text-foreground">{f.name}</div>
-                    <div className="text-xs text-muted-foreground">Founder</div>
+        {founders?.length > 0 && (
+          <div>
+            <h4 className="font-semibold text-slate-200 mb-3">Key People</h4>
+            <div className="space-y-3">
+              {founders.map((founder, i) => (
+                <div key={i} className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-slate-300">{founder.name}</span>
+                  <div className="flex gap-2">
+                    {founder.linkedin && <SocialButton href={founder.linkedin} icon={Linkedin} size="sm" />}
+                    {founder.twitter && <SocialButton href={founder.twitter} icon={Twitter} size="sm" />}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {f.linkedin && (
-                    <Link href={f.linkedin} target="_blank" className="text-slate-300 hover:text-white">
-                      <Linkedin className="w-3 h-3" />
-                    </Link>
-                  )}
-                  {f.twitter && (
-                    <Link href={f.twitter} target="_blank" className="text-slate-300 hover:text-white">
-                      <Twitter className="w-3 h-3" />
-                    </Link>
-                  )}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </CardContent>
     </Card>
-  )
+  );
 }
+
+const SocialButton = ({ href, icon: Icon, size = "default" }: { href: string, icon: React.ElementType, size?: "sm" | "default" }) => (
+  <Button variant="outline" size={size === "sm" ? "sm" : "icon"} asChild className="border-slate-800 hover:bg-slate-800/50">
+    <Link href={href} target="_blank">
+      <Icon className={`text-slate-400 hover:text-white ${size === "sm" ? "w-4 h-4" : "w-5 h-5"}`} />
+    </Link>
+  </Button>
+);
