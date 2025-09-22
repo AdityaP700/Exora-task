@@ -3,7 +3,8 @@
 import { NextResponse } from 'next/server';
 import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-service'; 
 import { fetchExaData, fetchHistoricalData } from '@/lib/exa-service';
-import { calculateNarrativeMomentum, calculatePulseIndex } from '@/lib/analysis-service';
+import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData } from '@/lib/analysis-service';
+import { normalizePublishedDate } from '@/lib/utils';
 import { BriefingResponse, EventType, CompanyProfile, FounderInfo } from '@/lib/types';
 
 // --- HELPER FUNCTIONS ---
@@ -259,7 +260,7 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
         title: a.title,
         url: a.url,
         domain: a.source?.name || 'news',
-        publishedDate: a.publishedAt
+        publishedDate: normalizePublishedDate(a.publishedAt)
       }))
       return { results: mapped }
     }))
@@ -286,7 +287,7 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
     if (relevantSignals.length > 0) {
       const classifiedEvents = await Promise.all(
         relevantSignals.slice(0, 12).map(async (signal: any) => ({
-          date: signal.publishedDate || new Date().toISOString(),
+          date: normalizePublishedDate(signal.publishedDate || new Date().toISOString()),
           headline: signal.title || 'N/A',
           type: await classifyEventType(signal.title, groqApiKey ?? undefined, openAiApiKey ?? undefined),
           url: signal.url || ''
@@ -302,19 +303,20 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
       const rest = primaryMentions.filter(m => !exact.includes(m))
       const ordered = [...exact, ...rest]
       finalEventLog = ordered.slice(0, 12).map((m: any) => ({
-        date: m.publishedDate || new Date().toISOString(),
+  date: normalizePublishedDate(m.publishedDate || new Date().toISOString()),
         headline: m.title || 'N/A',
         type: 'Other' as const,
         url: m.url || '#'
       }));
     }
 
-    // --- Step 4c: Calculate Final Benchmark Matrix (Optimized News Fetching) ---
+    // --- Step 4c: Calculate Final Benchmark Matrix (WITH SENTIMENT DATA) ---
     const benchmarkMatrix = allDomains.map((d, i) => {
       const mentions = enhancedMentions[i]?.results || [];
       const narrativeMomentum = calculateNarrativeMomentum(mentions);
       const sentimentScore = sentimentScores[i];
       const pulseIndex = calculatePulseIndex(narrativeMomentum, sentimentScore);
+      const sentimentHistoricalData = generateSentimentHistoricalData(mentions, sentimentScore);
 
       let topNews: any[];
       if (i === 0) {
@@ -325,7 +327,7 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
             headline: m.title || 'N/A',
             url: m.url || '#',
             source: m.domain || 'unknown',
-            publishedDate: m.publishedDate,
+            publishedDate: normalizePublishedDate(m.publishedDate || new Date().toISOString()),
           }));
       } else {
         // Competitors: store all, filter later to a global cap
@@ -333,7 +335,7 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
           headline: m.title || 'N/A',
           url: m.url || '#',
           source: m.domain || 'unknown',
-          publishedDate: m.publishedDate,
+          publishedDate: normalizePublishedDate(m.publishedDate || new Date().toISOString()),
           domain: d,
         }));
       }
@@ -344,6 +346,7 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
         narrativeMomentum,
         sentimentScore,
         historicalData: allHistoricalData[i] || [],
+        sentimentHistoricalData,
         news: topNews,
       };
     });
@@ -364,44 +367,72 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
       }
     });
 
-    // --- Step 5: AI Strategic Synthesis ---
-const superPrompt = `EXECUTIVE BRIEF: Strategic Analysis for ${domain}
+  // --- Step 5: IMPROVED AI Strategic Synthesis with actual sentiment data ---
+  const superPrompt = `EXECUTIVE BRIEF: Strategic Analysis for ${domain}
 
-You are preparing a board-level strategic assessment. The data below represents real-time competitive intelligence across key market players. Your analysis will inform strategic planning and potential investment decisions.
+You are preparing a board-level strategic assessment. The data below represents real-time competitive intelligence with sentiment analysis across key market players.
 
 COMPETITIVE INTELLIGENCE:
-${JSON.stringify(benchmarkMatrix, null, 2)}
+Primary Company: ${domain}
+- Sentiment Score: ${benchmarkMatrix[0]?.sentimentScore || 0}/100
+- Narrative Momentum: ${benchmarkMatrix[0]?.narrativeMomentum || 0}%
+- Recent News: ${benchmarkMatrix[0]?.news?.slice(0, 2).map(n => n.headline).join('; ') || 'None'}
+
+Competitors:
+${benchmarkMatrix.slice(1).map(comp => `
+- ${comp.domain}: Sentiment ${comp.sentimentScore}/100, Momentum ${comp.narrativeMomentum}%`).join('')}
 
 STRATEGIC ANALYSIS DIRECTIVE:
-Synthesize this data into exactly 3 executive-level insights focusing on:
+Based on the sentiment scores and momentum data, provide exactly 3 strategic insights:
 
-1. COMPETITIVE POSITIONING: Where does ${domain} stand relative to key competitors? What does the data reveal about market share momentum, brand strength, and competitive moats?
+1. COMPETITIVE POSITIONING: How does ${domain}'s sentiment (${benchmarkMatrix[0]?.sentimentScore}/100) compare to competitors? What does this reveal about market perception?
 
-2. MARKET DYNAMICS: What do the sentiment and momentum differentials indicate about industry trends, consumer preferences, and emerging opportunities?
+2. MARKET DYNAMICS: What do the sentiment differentials indicate about industry trends and ${domain}'s brand strength vs competitors?
 
-3. STRATEGIC PRIORITIES: Based on the competitive landscape, what should be the top strategic focus to strengthen market position?
+3. STRATEGIC PRIORITIES: Given the sentiment analysis, what should be the top priority to improve market perception and competitive position?
 
 REQUIREMENTS:
-- Be specific with metrics and comparisons
-- Focus on strategic implications, not data summaries  
-- Include both opportunities and risks
-- Write for senior executives who make strategic decisions
-- Each point should be actionable and forward-looking
+- Reference specific sentiment scores in your analysis
+- Focus on actionable strategic implications
+- Each point should be executive-level and forward-looking
+- Maximum 35 words per bullet point
 
-OUTPUT: 3 bullet points, each starting with "• ", maximum 40 words each.`;
-    const summaryResponse = await safeGenerateText(
-        superPrompt,
-        [
-            { provider: 'gemini', apiKey: geminiApiKey ?? undefined, model: 'gemini-2.0-flash' },
-            { provider: 'openai', apiKey: openAiApiKey ?? undefined, model: 'gpt-4o' }
-        ]
-    ).catch(() => '');
-    const summaryPoints = summaryResponse.split('\n').map(l => l.trim()).filter(l => l.startsWith('•') && l.length > 10).slice(0, 3);
-    if (summaryPoints.length === 0) {
-        summaryPoints.push(`• Analysis of ${domain} indicates notable market positioning.`);
-        summaryPoints.push(`• Company demonstrates competitive advantages in their sector.`);
-        summaryPoints.push(`• Growth opportunities identified through market analysis.`);
+OUTPUT: 3 bullet points, each starting with "• ";`
+
+  const summaryResponse = await safeGenerateText(
+    superPrompt,
+    [
+      { provider: 'gemini', apiKey: geminiApiKey ?? undefined, model: 'gemini-2.0-flash' },
+      { provider: 'openai', apiKey: openAiApiKey ?? undefined, model: 'gpt-4o' }
+    ]
+  ).catch(() => '');
+    
+  const summaryPoints = summaryResponse.split('\n')
+    .map(l => l.trim())
+    .filter(l => l.startsWith('•') && l.length > 10)
+    .slice(0, 3);
+    
+  if (summaryPoints.length === 0) {
+    const primarySentiment = benchmarkMatrix[0]?.sentimentScore || 50;
+    const avgCompetitorSentiment = benchmarkMatrix.slice(1).reduce((acc, comp) => acc + comp.sentimentScore, 0) / Math.max(benchmarkMatrix.length - 1, 1);
+        
+    if (primarySentiment > avgCompetitorSentiment + 10) {
+      summaryPoints.push(`• ${domain} shows stronger market sentiment (${primarySentiment}/100) than competitors, indicating positive brand perception and growth potential.`);
+      summaryPoints.push(`• Leverage current positive sentiment momentum to expand market share and strengthen competitive positioning against rivals.`);
+      summaryPoints.push(`• Focus on maintaining sentiment advantage through consistent product innovation and strategic communications to sustain market leadership.`);
+    } else if (primarySentiment < avgCompetitorSentiment - 10) {
+      summaryPoints.push(`• ${domain} sentiment (${primarySentiment}/100) lags competitors, indicating potential brand perception challenges requiring immediate strategic attention.`);
+      summaryPoints.push(`• Implement comprehensive reputation management strategy to address sentiment gap and rebuild market confidence.`);
+      summaryPoints.push(`• Prioritize customer experience improvements and strategic communications to close sentiment deficit with key competitors.`);
+    } else {
+      summaryPoints.push(`• ${domain} maintains competitive sentiment parity (${primarySentiment}/100), suggesting stable market position with room for strategic differentiation.`);
+      summaryPoints.push(`• Balanced competitive landscape creates opportunity for breakthrough initiatives to capture sentiment leadership and market share.`);
+      summaryPoints.push(`• Focus on innovation and unique value proposition to break away from competitor sentiment clustering.`);
     }
+  }
+  // Log the executive summary for debugging
+  console.log(`📋 Executive Summary Generated:`);
+  summaryPoints.forEach((point, i) => console.log(`   ${i + 1}. ${point}`));
 
     // --- Step 6: Bundle Response ---
   const response: BriefingResponse = {

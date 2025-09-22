@@ -1,7 +1,7 @@
 "use client"
 import { Card } from "./ui/card"
 import { Badge } from "./ui/badge"
-import { MiniChart } from "./chart-components"
+import { AreaMiniChart } from "./chart-components"
 import { TrendingUp, TrendingDown, Zap } from "lucide-react"
 
 interface InsightCardProps {
@@ -10,6 +10,8 @@ interface InsightCardProps {
   sentiment: "positive" | "negative" | "neutral"
   trend: "up" | "down" | "neutral"
   data: number[]
+  sentimentData?: Array<{ date: string; sentiment: number; mentions: number }>
+  sentimentScore?: number
   isSpotted?: boolean
   isFrontingInsight?: boolean
 }
@@ -20,6 +22,8 @@ export function InsightCard({
   sentiment,
   trend,
   data,
+  sentimentData,
+  sentimentScore = 50,
   isSpotted = false,
   isFrontingInsight = false,
 }: InsightCardProps) {
@@ -45,16 +49,8 @@ export function InsightCard({
     }
   }
 
-  const getChartColor = (sentiment: string) => {
-    switch (sentiment) {
-      case "positive":
-        return "#2ecc71"
-      case "negative":
-        return "#e74c3c"
-      default:
-        return "#3498db"
-    }
-  }
+  const getChartColorVar = (sentiment: string) =>
+    sentiment === 'positive' ? 'var(--chart-2)' : sentiment === 'negative' ? 'var(--chart-3)' : 'var(--chart-1)'
 
   return (
     <Card className="p-4 hover:shadow-lg transition-shadow duration-200">
@@ -78,14 +74,19 @@ export function InsightCard({
         {/* Source */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <div className="w-4 h-4 rounded-full bg-muted flex items-center justify-center">
-            <span className="text-xs font-medium">TC</span>
+            <span className="text-xs font-medium">ES</span>
           </div>
           <span>Source: {source}</span>
         </div>
 
-        {/* Chart */}
+        {/* Chart with Sentiment Data */}
         <div className="relative">
-          <MiniChart data={data} color={getChartColor(sentiment)} trend={trend} className="h-12" />
+          <AreaMiniChart
+            series={Array.isArray(data) ? data.map((v, i) => ({ label: String(i + 1), value: typeof v === 'number' ? v : 0 })) : []}
+            sentimentData={sentimentData}
+            colorVar={getChartColorVar(sentiment)}
+            height={64}
+          />
         </div>
 
         {/* Status Indicators */}
@@ -102,9 +103,10 @@ export function InsightCard({
           <div className="flex items-center gap-1">{getTrendIcon(trend)}</div>
         </div>
 
-        {/* Sentiment Detail */}
-        <div className="text-xs text-muted-foreground">
-          <span>Sentiment</span>
+        {/* Sentiment Score Display */}
+        <div className="text-xs text-muted-foreground flex justify-between items-center">
+          <span>Sentiment Score</span>
+          <span className="font-medium">{Math.round(sentimentScore)}/100</span>
         </div>
       </div>
     </Card>

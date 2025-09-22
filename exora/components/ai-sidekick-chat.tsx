@@ -28,14 +28,18 @@ export function AISidekickChat({ data }: Props) {
             <Card className="p-3 bg-muted/50">
               <div className="text-sm text-foreground">{data.groqTlDr}</div>
             </Card>
-            <div className="space-y-2">
-              {data.summary.map((point, i) => (
-                <div key={i} className="flex items-start gap-2 text-sm">
-                  <span className="text-accent">•</span>
-                  <span className="text-foreground">{point.replace(/^•\s*/, '')}</span>
-                </div>
-              ))}
-            </div>
+            {data.summary && data.summary.length > 0 ? (
+              <div className="space-y-2">
+                {data.summary.map((point, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm">
+                    <span className="text-accent">•</span>
+                    <span className="text-foreground">{point.replace(/^\u2022\s*/, '')}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">Generating executive summary…</div>
+            )}
           </>
         ) : (
           <div className="text-sm text-muted-foreground">

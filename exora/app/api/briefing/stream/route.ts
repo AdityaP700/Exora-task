@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { sharedLimiter } from '@/lib/limiter'
 import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-service'
 import { fetchExaData } from '@/lib/exa-service'
-import { calculateNarrativeMomentum, calculatePulseIndex } from '@/lib/analysis-service'
+import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData } from '@/lib/analysis-service'
+import { normalizePublishedDate } from '@/lib/utils'
 
 // Emit SSE event helper
 function sseChunk(event: string, data: unknown) {
@@ -95,7 +96,7 @@ export async function GET(req: Request) {
         const rest = (mainMentions.results || []).filter((m: any) => !exact.includes(m))
         const ordered = [...exact, ...rest]
         const mainTopNews = ordered.slice(0, 3).map((m: any) => ({
-          headline: m.title, url: m.url, source: m.domain, publishedDate: m.publishedDate
+          headline: m.title, url: m.url, source: m.domain, publishedDate: normalizePublishedDate(m.publishedDate || new Date().toISOString())
         }))
         send('company-news', { news: mainTopNews })
 
@@ -107,7 +108,7 @@ export async function GET(req: Request) {
         // Flatten, take latest 4 across all competitors
         const competitorNewsAll = compResults.flatMap((r, idx) => {
           const d = competitors[idx]
-          return (r.results || []).map((m: any) => ({ domain: d, headline: m.title, url: m.url, source: m.domain, publishedDate: m.publishedDate }))
+          return (r.results || []).map((m: any) => ({ domain: d, headline: m.title, url: m.url, source: m.domain, publishedDate: normalizePublishedDate(m.publishedDate || new Date().toISOString()) }))
         }).filter(n => n.headline)
           .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
           .slice(0, 4)
@@ -123,11 +124,17 @@ export async function GET(req: Request) {
 
         // Build benchmark rows
         const benchmark = allDomains.map((d, i) => {
-          const mentions = allMentions[i]?.results || []
+          const mentions = (allMentions[i]?.results || []).map((m: any) => ({
+            title: m.title,
+            publishedDate: m.publishedDate,
+            url: m.url,
+            domain: m.domain,
+          }))
           const momentum = calculateNarrativeMomentum(mentions)
           const sentiment = sentimentScores[i] || 50
           const pulse = calculatePulseIndex(momentum, sentiment)
-          return { domain: d, narrativeMomentum: momentum, sentimentScore: sentiment, pulseIndex: pulse }
+          const sentimentHistoricalData = generateSentimentHistoricalData(mentions, sentiment)
+          return { domain: d, narrativeMomentum: momentum, sentimentScore: sentiment, pulseIndex: pulse, sentimentHistoricalData }
         })
         send('sentiment', { benchmark })
 

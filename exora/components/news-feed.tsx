@@ -2,9 +2,9 @@
 
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
-import type { NewsItem } from "@/lib/types"
+import type { EventLogItem } from "@/lib/types"
 
-export function NewsFeed({ title, items }: { title: string; items: NewsItem[] }) {
+export function NewsFeed({ title, items }: { title: string; items: EventLogItem[] }) {
   return (
     <Card className="p-4 bg-card border-border">
       <div className="text-sm font-semibold text-foreground mb-3">{title}</div>

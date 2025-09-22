@@ -3,7 +3,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { BriefingResponse, BenchmarkMatrixRow } from "@/lib/types";
+import type { BriefingResponse, BenchmarkMatrixItem, NewsItem } from "@/lib/types";
 import Link from "next/link";
 import { Globe } from "lucide-react";
 
@@ -66,7 +66,7 @@ const NewsItem = ({ headline, url, source, type, date }: { headline: string, url
 );
 
 // Back-compat simple competitor news list used in Overview
-export function CompetitorNews({ competitors }: { competitors: BenchmarkMatrixRow[] }) {
+export function CompetitorNews({ competitors }: { competitors: BenchmarkMatrixItem[] }) {
   return (
     <Card className="p-4 bg-card border-border">
       <div className="text-sm font-semibold text-foreground mb-3">Competitor News</div>
@@ -76,7 +76,7 @@ export function CompetitorNews({ competitors }: { competitors: BenchmarkMatrixRo
             <div className="text-xs font-medium text-muted-foreground mb-1">{c.domain}</div>
             <div className="space-y-2">
               {c.news.length > 0 ? (
-                c.news.map((n, i) => (
+                c.news.map((n: NewsItem, i: number) => (
                   <NewsItem key={i} headline={n.headline} url={n.url} source={n.source} />
                 ))
               ) : (

@@ -1,61 +1,86 @@
-// lib/types.ts
+// lib/types.ts - Updated with sentiment data types
 
-export type EventType = 'Funding' | 'Product Launch' | 'Layoffs' | 'Acquisition';
+export type EventType = "Funding" | "Product Launch" | "Acquisition" | "Layoffs"
+
+export interface CompanyProfile {
+  name: string
+  domain: string
+  description: string
+  ipoStatus: "Public" | "Private" | "Unknown"
+  socials: {
+    linkedin?: string
+    twitter?: string
+    facebook?: string
+  }
+}
+
+export interface FounderInfo {
+  name: string
+  linkedin?: string
+  twitter?: string
+}
+
+export interface NewsItem {
+  headline: string
+  url: string
+  source: string
+  publishedDate: string,
+  date : string
+  type?: EventType | "Other"
+}
 
 export interface HistoricalDataPoint {
-  date: string;
-  mentions: number;
+  date: string
+  mentions: number
 }
 
-// NEW: A richer structure for company info
-export interface CompanyProfile {
-  name: string;
-  domain: string;
-  description: string;
-  ipoStatus: 'Public' | 'Private' | 'Unknown';
-  socials: {
-    linkedin?: string;
-    twitter?: string;
-    facebook?: string;
-  };
+export interface SentimentHistoricalDataPoint {
+  date: string
+  sentiment: number
+  mentions: number
 }
 
-// NEW: A structure for founder info
-export interface FounderInfo {
-  name: string;
-  linkedin?: string;
-  twitter?: string;
+export interface BenchmarkMatrixItem {
+  domain: string
+  pulseIndex: number
+  narrativeMomentum: number
+  sentimentScore: number
+  historicalData: HistoricalDataPoint[]
+  sentimentHistoricalData?: SentimentHistoricalDataPoint[] // NEW: Sentiment-aware historical data
+  news: NewsItem[]
+  BenchmarkRank?: number
 }
 
-// UPDATED: Competitor info now includes their own news
-export interface BenchmarkMatrixRow {
-  domain: string;
-  pulseIndex: number;
-  narrativeMomentum: number;
-  sentimentScore: number;
-  historicalData: HistoricalDataPoint[];
-  news: { headline: string; url: string; source: string }[];
-}
-
-// NEW: A separate field for the primary company's news (formerly eventLog)
-export interface NewsItem {
-  date: string;
-  type: EventType | 'Other';
-  headline: string;
-  url: string;
+export interface EventLogItem {
+  date: string
+  headline: string
+  type: EventType | "Other"
+  url: string
 }
 
 export interface AiSummaryData {
-  summary: string[];
-  groqTlDr: string;
+  summary: string[]
+  groqTlDr: string
 }
 
-// UPDATED: The main response object
 export interface BriefingResponse {
-  requestDomain: string;
-  companyProfile: CompanyProfile;
-  founderInfo: FounderInfo[];
-  benchmarkMatrix: BenchmarkMatrixRow[];
-  newsFeed: NewsItem[];
-  aiSummary: AiSummaryData;
+  requestDomain: string
+  companyProfile: CompanyProfile
+  founderInfo: FounderInfo[]
+  benchmarkMatrix: BenchmarkMatrixItem[]
+  newsFeed: EventLogItem[]
+  aiSummary: AiSummaryData
+}
+
+// Additional utility types for chart components
+export interface ChartDataPoint {
+  label: string
+  value: number
+}
+
+export interface SentimentAnalysisResult {
+  sentimentScore: number
+  momentum: number
+  historicalData: SentimentHistoricalDataPoint[]
+  summary: string[]
 }

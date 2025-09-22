@@ -1,5 +1,6 @@
 // lib/exa-service.ts
 import { sharedLimiter } from '@/lib/limiter';
+import { normalizePublishedDate } from '@/lib/utils';
 const EXA_API_URL = 'https://api.exa.ai/search';
 
 // 🔧 FIXED: Add delay function for rate limiting
@@ -88,6 +89,7 @@ export async function fetchExaData(
 
   const uniqueResults = allResults
     .filter((result, index, self) => result.url && index === self.findIndex(r => r.url === result.url))
+    .map(r => ({ ...r, publishedDate: normalizePublishedDate(r.publishedDate || new Date().toISOString()) }))
     .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
 
   // Disambiguate homonyms: if a different company shares the same brand name (e.g., mercor.finance),
@@ -192,6 +194,7 @@ export async function fetchSignals(domain: string, apiKey: string): Promise<any>
     .filter((result, index, self) => 
       result.url && index === self.findIndex(r => r.url === result.url)
     )
+    .map(r => ({ ...r, publishedDate: normalizePublishedDate(r.publishedDate || new Date().toISOString()) }))
     .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
   
   console.log(`🎯 Total signals for ${domain}: ${allResults.length} raw → ${uniqueResults.length} unique`);

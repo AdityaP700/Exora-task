@@ -13,7 +13,7 @@ import { NewsFeed } from "@/components/news-feed";
 import { CompetitorNews } from "@/components/competitor-news";
 import { AIInputWithSearch } from "@/components/ui/ai-input-with-search";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import type { BriefingResponse, AiSummaryData, CompanyProfile, FounderInfo, BenchmarkMatrixRow, NewsItem } from "@/lib/types";
+import type { BriefingResponse, AiSummaryData, CompanyProfile, FounderInfo, BenchmarkMatrixItem, NewsItem, EventLogItem, SentimentHistoricalDataPoint } from "@/lib/types";
 import { LoaderFour } from "@/components/ui/loader";
 
 // A skeleton loader that matches the final results layout
@@ -43,7 +43,7 @@ export default function ExoraPage() {
   const [competitors, setCompetitors] = useState<string[]>([])
   const [companyNews, setCompanyNews] = useState<Array<{headline:string;url:string;source?:string;publishedDate?:string}>>([])
   const [competitorNews, setCompetitorNews] = useState<Array<{domain:string;headline:string;url:string;source?:string;publishedDate?:string}>>([])
-  const [benchmark, setBenchmark] = useState<Array<{domain:string;narrativeMomentum:number;sentimentScore:number;pulseIndex:number}>>([])
+  const [benchmark, setBenchmark] = useState<Array<{domain:string;narrativeMomentum:number;sentimentScore:number;pulseIndex:number; sentimentHistoricalData?: SentimentHistoricalDataPoint[]}>>([])
   const [summaryText, setSummaryText] = useState<string>("")
 
   const [isStreaming, setIsStreaming] = useState(false)
@@ -203,7 +203,7 @@ export default function ExoraPage() {
     }
   };
   // Derived helpers for rendering existing components
-  const companyNewsItems: NewsItem[] = useMemo(() => {
+  const companyNewsItems: EventLogItem[] = useMemo(() => {
     return (companyNews || []).map(n => ({
       date: n.publishedDate || new Date().toISOString(),
       type: 'Other',
@@ -212,12 +212,12 @@ export default function ExoraPage() {
     }))
   }, [companyNews])
 
-  const competitorRowsForOverview: BenchmarkMatrixRow[] = useMemo(() => {
+  const competitorRowsForOverview: BenchmarkMatrixItem[] = useMemo(() => {
     // Group competitor news by domain
-    const map = new Map<string, { headline:string; url:string; source:string }[]>()
+    const map = new Map<string, NewsItem[]>()
     for (const item of competitorNews) {
       const list = map.get(item.domain) || []
-      list.push({ headline: item.headline, url: item.url, source: item.source || 'news' })
+      list.push({ headline: item.headline, url: item.url, source: item.source || 'news', publishedDate: item.publishedDate || new Date().toISOString(), date: item.publishedDate || new Date().toISOString(), type: 'Other' })
       map.set(item.domain, list)
     }
     return Array.from(map.entries()).map(([d, news]) => ({
@@ -242,13 +242,14 @@ export default function ExoraPage() {
       list.push({ headline: cn.headline, url: cn.url, source: cn.source || 'news' })
       newsByDomain.set(cn.domain, list)
     }
-    const benchmarkMatrix: BenchmarkMatrixRow[] = benchmark.map(b => ({
+    const benchmarkMatrix: BenchmarkMatrixItem[] = benchmark.map(b => ({
       domain: b.domain,
       pulseIndex: b.pulseIndex,
       narrativeMomentum: b.narrativeMomentum,
       sentimentScore: b.sentimentScore,
       historicalData: [],
-      news: newsByDomain.get(b.domain) || []
+      sentimentHistoricalData: b.sentimentHistoricalData,
+      news: (newsByDomain.get(b.domain) || []).map(n => ({ headline: n.headline, url: n.url, source: n.source, publishedDate: new Date().toISOString(), date: new Date().toISOString(), type: 'Other' }))
     }))
 
     const aiSummary: AiSummaryData = {
