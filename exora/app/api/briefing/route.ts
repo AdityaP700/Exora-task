@@ -25,7 +25,7 @@ function parseCompetitorResponse(text: string): string[] {
 }
 
 async function discoverCompetitors(domain: string, providers: ProviderConfig[]): Promise<string[]> {
-  const prompt = `Analyze the company at domain "${domain}" and identify its top 3 direct competitors. Return ONLY a JSON array of competitor domains.\n\nExamples:\n- stripe.com → ["paypal.com", "square.com", "adyen.com"]\n\nFormat: ["competitor1.com", "competitor2.com", "competitor3.com"]`;
+  const prompt = `Analyze ONLY the company operating at the exact domain \"${domain}\" (ignore similarly named companies on different TLDs like .finance, .ai, etc.). Identify the top 3 direct competitors. Return ONLY a JSON array of competitor domains.\n\nExamples:\n- stripe.com → ["paypal.com", "square.com", "adyen.com"]\n\nFormat: ["competitor1.com", "competitor2.com", "competitor3.com"]`;
   
   try {
     const result = await safeGenerateJson<string[]>(prompt, providers);
@@ -122,7 +122,24 @@ async function fetchNewsApiFallback(domain: string, apiKey?: string) {
     const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } })
     if (!res.ok) return []
     const json = await res.json()
-    return (json.articles || []) as any[]
+    const articles = (json.articles || []) as any[]
+    // Filter homonyms: keep exact-domain links and trusted news; drop other brand TLDs
+    const trustedNews = new Set([
+      'techcrunch.com','wsj.com','bloomberg.com','forbes.com','businessinsider.com','reuters.com','theverge.com','nytimes.com','ft.com','wired.com','cnbc.com','cnn.com','bbc.com'
+    ])
+    const getHost = (u: string): string | null => { try { return new URL(u).hostname.toLowerCase() } catch { return null } }
+    const target = domain.toLowerCase()
+    const brand = companyName.toLowerCase()
+    return articles.filter(a => {
+      const host = getHost(a.url)
+      if (!host) return true
+      const isExact = host === target || host.endsWith(`.${target}`)
+      if (isExact) return true
+      const isTrusted = trustedNews.has(host) || Array.from(trustedNews).some(n => host === n || host.endsWith(`.${n}`))
+      if (isTrusted) return true
+      if (host.includes(brand)) return false
+      return true
+    })
   } catch {
     return []
   }
@@ -265,7 +282,7 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
       relevantSignals = allRawSignals.filter((s: any) => !!s.title);
     }
 
-    let finalEventLog;
+  let finalEventLog;
     if (relevantSignals.length > 0) {
       const classifiedEvents = await Promise.all(
         relevantSignals.slice(0, 12).map(async (signal: any) => ({
@@ -277,9 +294,14 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
       );
       finalEventLog = classifiedEvents;
     } else {
-      // Fallback: build news from primary mentions
+      // Fallback: build news from primary mentions, prefer exact-domain matches first
       const primaryMentions = (enhancedMentions[0]?.results || []) as any[];
-      finalEventLog = primaryMentions.slice(0, 12).map((m: any) => ({
+      const target = domain.toLowerCase();
+      const getHost = (u: string): string | null => { try { return new URL(u).hostname.toLowerCase() } catch { return null } }
+      const exact = primaryMentions.filter(m => { const h = getHost(m.url); return h && (h === target || h.endsWith(`.${target}`)) })
+      const rest = primaryMentions.filter(m => !exact.includes(m))
+      const ordered = [...exact, ...rest]
+      finalEventLog = ordered.slice(0, 12).map((m: any) => ({
         date: m.publishedDate || new Date().toISOString(),
         headline: m.title || 'N/A',
         type: 'Other' as const,

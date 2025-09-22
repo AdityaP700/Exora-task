@@ -90,8 +90,38 @@ export async function fetchExaData(
     .filter((result, index, self) => result.url && index === self.findIndex(r => r.url === result.url))
     .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
 
-  console.log(`📊 Total ${type} for ${domain}: ${allResults.length} raw → ${uniqueResults.length} unique`);
-  return { results: uniqueResults };
+  // Disambiguate homonyms: if a different company shares the same brand name (e.g., mercor.finance),
+  // exclude results hosted on domains that include the brand but are NOT the target domain.
+  // Keep exact-domain matches and neutral news sources.
+  let filtered = uniqueResults;
+  if (type === 'mentions') {
+    const target = domain.toLowerCase();
+    const brand = companyName.toLowerCase();
+    const trustedNews = new Set([
+      'techcrunch.com', 'wsj.com', 'bloomberg.com', 'forbes.com', 'businessinsider.com', 'reuters.com',
+      'theverge.com', 'nytimes.com', 'ft.com', 'wired.com', 'cnbc.com', 'cnn.com', 'bbc.com'
+    ]);
+
+    const getHost = (u: string): string | null => {
+      try { return new URL(u).hostname.toLowerCase(); } catch { return null; }
+    };
+
+    filtered = uniqueResults.filter(r => {
+      const host = getHost(r.url);
+      if (!host) return true;
+      const isExactDomain = host === target || host.endsWith(`.${target}`);
+      if (isExactDomain) return true;
+      const isTrustedNews = trustedNews.has(host) || Array.from(trustedNews).some(n => host === n || host.endsWith(`.${n}`));
+      if (isTrustedNews) return true;
+      const looksLikeHomonymCompany = host.includes(brand);
+      // If the host looks like another brand site (contains brand) but is not our exact domain, drop it
+      if (looksLikeHomonymCompany) return false;
+      return true;
+    });
+  }
+
+  console.log(`📊 Total ${type} for ${domain}: ${allResults.length} raw → ${uniqueResults.length} unique → ${filtered.length} filtered`);
+  return { results: filtered };
 }
 
 // 🔧 FIXED: Rate-limited mentions fetching

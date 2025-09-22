@@ -16,7 +16,7 @@ function cleanDomain(raw: string) {
 
 // Competitor discovery
 async function discoverCompetitors(domain: string, providers: ProviderConfig[]): Promise<string[]> {
-  const prompt = `Identify top 3 direct competitors for ${domain}. Return ONLY JSON array of domains.`
+  const prompt = `Identify top 3 direct competitors for the company operating at the exact domain ${domain}. Ignore similarly named companies on different TLDs. Return ONLY JSON array of domains.`
   try {
     const list = await safeGenerateJson<string[]>(prompt, providers)
     return Array.isArray(list) ? list.slice(0, 3) : []
@@ -87,8 +87,14 @@ export async function GET(req: Request) {
   const competitors = await discoverCompetitors(domain, llmProviders)
         send('competitors', { competitors })
 
-  const mainMentions = await fetchExaData(domain, 'mentions', exaKey, { numResults: 15 })
-        const mainTopNews = (mainMentions.results || []).slice(0, 3).map((m: any) => ({
+        const mainMentions = await fetchExaData(domain, 'mentions', exaKey, { numResults: 15 })
+        // prefer exact-domain links first
+        const getHost = (u: string): string | null => { try { return new URL(u).hostname.toLowerCase() } catch { return null } }
+        const target = domain.toLowerCase()
+        const exact = (mainMentions.results || []).filter((m: any) => { const h = getHost(m.url); return h && (h === target || h.endsWith(`.${target}`)) })
+        const rest = (mainMentions.results || []).filter((m: any) => !exact.includes(m))
+        const ordered = [...exact, ...rest]
+        const mainTopNews = ordered.slice(0, 3).map((m: any) => ({
           headline: m.title, url: m.url, source: m.domain, publishedDate: m.publishedDate
         }))
         send('company-news', { news: mainTopNews })

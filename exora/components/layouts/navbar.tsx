@@ -3,13 +3,17 @@
 
 import * as React from "react"
 import { motion } from "framer-motion"
-import { Home, Search, GitCompareArrows, BookOpen, Github } from "lucide-react"
+import { Search, Github } from "lucide-react"
 import { HoverButton } from "@/components/ui/hover-button"
 
 export function Navbar() {
   const navItems = [
     { name: "Search", icon: Search },
-    { name: "GitHub", icon: Github },
+    {name: "GitHub", 
+      icon: Github, 
+      href: "https://github.com/AdityaP700/Exora-task",
+      external: true 
+    },
   ]
 
   return (
