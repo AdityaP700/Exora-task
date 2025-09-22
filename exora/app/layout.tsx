@@ -12,17 +12,23 @@ export const metadata: Metadata = {
   generator: "v0.app",
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} antialiased`}>
-        <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+        <div className="min-h-screen w-full bg-black relative">
+          {/* Midnight Aurora Glow Background */}
+          <div
+            className="absolute inset-0 z-0"
+            style={{
+              backgroundImage: `radial-gradient(circle at 50% 50%, rgba(58, 123, 255, 0.15) 0%, rgba(123, 104, 238, 0.07) 35%, transparent 50%)`,
+            }}
+          />
+          {/* Add a z-index to your content */}
+          <div className="relative z-10">{children}</div>
+        </div>
         <Analytics />
       </body>
     </html>
-  )
+  );
 }

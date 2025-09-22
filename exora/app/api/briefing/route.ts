@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-service'; 
-import { fetchMentions, fetchSignals } from '@/lib/exa-service';
+import { fetchMentions, fetchSignals, fetchHistoricalData } from '@/lib/exa-service';
 import { calculateNarrativeMomentum, calculatePulseIndex } from '@/lib/analysis-service';
 import { BriefingResponse, EventType } from '@/lib/types';
 
@@ -142,34 +142,30 @@ export async function GET(request: Request) {
       ];
 
     // --- Step 1: Improved Groq TL;DR ---
-const groqTlDrPrompt = `What is the company at the domain "${domain}"? Provide a brief, factual description of what they do in one sentence. If you're not familiar with this specific company, make a reasonable inference based on the domain name and provide a general business description.`;
+    const groqTlDrPrompt = `What is the company at the domain "${domain}"? Provide a brief, factual description of what they do in one sentence. If you're not familiar with this specific company, make a reasonable inference based on the domain name and provide a general business description.`;
     const groqTlDrPromise = safeGenerateText(groqTlDrPrompt, groqProviders)
       .catch(() => `Company analysis for ${domain}`);
     
-      const competitorsPromise = discoverCompetitors(domain, llmProviders)
-          .then(raw => validateAndCleanCompetitors(raw, domain));
+    const competitorsPromise = discoverCompetitors(domain, llmProviders)
+        .then(raw => validateAndCleanCompetitors(raw, domain));
 
-      const [groqTlDr, competitors] = await Promise.all([groqTlDrPromise, competitorsPromise]);
-      const allDomains = [domain, ...competitors];
+    const [groqTlDr, competitors] = await Promise.all([groqTlDrPromise, competitorsPromise]);
+    const allDomains = [domain, ...competitors];
 
-      // --- Step 3: FIXED - Sequential, Rate-Limited Data Fetch ---
-      console.log(`📋 Fetching data for domains: ${allDomains.join(', ')}`);
-      const allMentions: any[] = [];
-      for (const currentDomain of allDomains) {
-        try {
-          // Add a small delay before each request to stay under the limit
-          await new Promise(resolve => setTimeout(resolve, 250));
-          const mentions = await fetchMentions(currentDomain, exaApiKey);
-          allMentions.push(mentions);
-        } catch (error: any) {
-          console.error(`❌ Failed to fetch mentions for ${currentDomain}:`, error.message);
-          allMentions.push({ results: [] });
-        }
-      }
-      console.log(`📋 Final mentions summary: ${allMentions.map((m, i) => `${allDomains[i]}: ${m.results?.length || 0}`).join(', ')}`);
+    // --- Step 3: Combined Data Fetch with Historical Data ---
+    console.log(`📋 Fetching comprehensive data for domains: ${allDomains.join(', ')}`);
+    
+    const [mentionsResults, signalsResults, historicalDataResults] = await Promise.allSettled([
+        Promise.all(allDomains.map((d, i) => new Promise(resolve => setTimeout(resolve, i * 250)).then(() => fetchMentions(d, exaApiKey)))),
+        fetchSignals(domain, exaApiKey),
+        Promise.all(allDomains.map(d => fetchHistoricalData(d, exaApiKey))) // This is slow, but necessary for V1
+    ]);
 
-      // Fetch signals separately (it has its own internal rate limiting)
-      const primarySignals = await fetchSignals(domain, exaApiKey);
+    const allMentions = (mentionsResults.status === 'fulfilled') ? mentionsResults.value : allDomains.map(() => ({ results: [] }));
+    const primarySignals = (signalsResults.status === 'fulfilled') ? signalsResults.value : { results: [] };
+    const allHistoricalData = (historicalDataResults.status === 'fulfilled') ? historicalDataResults.value : allDomains.map(() => []);
+
+    console.log(`📋 Final data summary: mentions=${allMentions.map((m, i) => `${allDomains[i]}:${m.results?.length || 0}`).join(', ')}, historical=${allHistoricalData.map((h, i) => `${allDomains[i]}:${h?.length || 0}`).join(', ')}`);
 
     // --- Step 4a: Real Sentiment Analysis ---
     const sentimentScores = await Promise.all(
@@ -191,13 +187,19 @@ const groqTlDrPrompt = `What is the company at the domain "${domain}"? Provide a
     );
     const finalEventLog = classifiedEvents.filter(event => event.type !== "Other");
 
-    // --- Step 4c: Calculate Final Benchmark Matrix ---
+    // --- Step 4c: Calculate Final Benchmark Matrix (Now with Historical Data) ---
     const benchmarkMatrix = allDomains.map((d, i) => {
         const mentions = allMentions[i]?.results || [];
         const narrativeMomentum = calculateNarrativeMomentum(mentions);
         const sentimentScore = sentimentScores[i];
         const pulseIndex = calculatePulseIndex(narrativeMomentum, sentimentScore);
-        return { domain: d, pulseIndex, narrativeMomentum, sentimentScore };
+        return { 
+            domain: d, 
+            pulseIndex, 
+            narrativeMomentum, 
+            sentimentScore,
+            historicalData: allHistoricalData[i] || [] // <-- ADD THIS
+        };
     });
 
     // --- Step 5: AI Strategic Synthesis ---

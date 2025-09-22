@@ -108,7 +108,7 @@ export async function fetchSignals(domain: string, apiKey: string): Promise<any>
   console.log(`🎯 Total signals for ${domain}: ${allResults.length} raw → ${uniqueResults.length} unique`);
   return { results: uniqueResults.slice(0, 15) };
 }
-export async function fetchHistoricalData(domain: string, apiKey: string): Promise<any[]> {
+export async function fetchHistoricalData(domain: string, apiKey: string): Promise<{ date: string; mentions: number }[]> {
   const companyName = domain.split('.')[0];
   const datePoints: { date: string; mentions: number }[] = [];
   
@@ -119,26 +119,25 @@ export async function fetchHistoricalData(domain: string, apiKey: string): Promi
     return d.toISOString().split('T')[0];
   });
 
-  // Fetch mention counts for each day sequentially to respect rate limits
+  // Fetch mention counts for each day sequentially
   for (const date of dates.reverse()) { // Start from oldest to newest
     const nextDay = new Date(date);
     nextDay.setDate(nextDay.getDate() + 1);
 
     const body = {
       query: `"${domain}" OR "${companyName}"`,
-      numResults: 100, // We only care about the count, so get as many as possible
+      numResults: 100, // We only care about the count
       startPublishedDate: date,
       endPublishedDate: nextDay.toISOString().split('T')[0],
     };
     
     try {
-      // Use Exa's /search endpoint which is efficient for counts
       const result = await exaSearch(apiKey, body);
       datePoints.push({ date, mentions: result.results?.length || 0 });
       await new Promise(resolve => setTimeout(resolve, 250)); // Stay safely under rate limit
     } catch (error) {
-      console.warn(`Could not fetch historical data for ${domain} on ${date}:`, error);
-      datePoints.push({ date, mentions: 0 });
+      console.warn(`Could not fetch historical data for ${domain} on ${date}`, error);
+      datePoints.push({ date, mentions: 0 }); // Push 0 on error to keep the timeline consistent
     }
   }
   return datePoints;
