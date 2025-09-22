@@ -1,4 +1,5 @@
-# Exora Progressive Intelligence Briefing
+# Exora 
+<img width="1916" height="937" alt="image" src="https://github.com/user-attachments/assets/2e577a12-5331-4363-97f2-9c29ffe8dcd4" />
 
 A Next.js app that streams a VC-grade competitive briefing progressively: instant company overview and founders, followed by news, competitor updates, sentiment analysis, and an executive summary. All external API calls are globally rate-limited to respect provider constraints.
 
