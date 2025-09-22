@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Navbar } from "@/components/layouts/navbar"; // The stunning navbar
 import { AllInvestorView } from "@/components/all-investor-view";
 import { TrendAnalysisView } from "@/components/trend-analysis-view";
+import { AnalysisView } from "@/components/analysis-view";
+import { SummaryView } from "@/components/summary-view";
 import { AISidekickChat } from "@/components/ai-sidekick-chat";
 import { CompanyOverviewCard } from "@/components/company-overview-card";
 import { NewsFeed } from "@/components/news-feed";
@@ -40,7 +42,8 @@ export default function ExoraPage() {
   const [briefingData, setBriefingData] = useState<BriefingResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("all-investor");
+  // Three-view toggle: overview, analysis, summary
+  const [activeView, setActiveView] = useState<"overview" | "analysis" | "summary">("overview");
 
   const handleSearch = async (domain: string) => {
     setIsLoading(true);
@@ -98,35 +101,42 @@ export default function ExoraPage() {
                       onSubmit={(value) => handleSearch(value)}
                     />
                   </div>
-
-                  {/* Two-column briefing document */}
-                  <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left column: Company overview & summary */}
-                    <div className="lg:col-span-1 space-y-6">
-                      <CompanyOverviewCard profile={briefingData.companyProfile} founders={briefingData.founderInfo} />
-                      <AISidekickChat data={briefingData.aiSummary} />
-                    </div>
-                    {/* Right column: News */}
-                    <div className="lg:col-span-2 space-y-6">
-                      <NewsFeed title="Latest Company News" items={briefingData.newsFeed} />
-                      <CompetitorNews competitors={briefingData.benchmarkMatrix} />
-                    </div>
-                  </div>
-
-                  {/* View toggle for comparisons & charts */}
-                  <div className="mt-10 flex items-center justify-center">
-                    <ToggleGroup value={activeTab} onValueChange={(v) => v && setActiveTab(v)}>
-                      <ToggleGroupItem value="all-investor" aria-label="All Investor View">Comparison</ToggleGroupItem>
-                      <ToggleGroupItem value="trend-analysis" aria-label="Trend Analysis">Charts</ToggleGroupItem>
+                  {/* Three-toggle under search */}
+                  <div className="mt-6 flex items-center justify-center">
+                    <ToggleGroup value={activeView} onValueChange={(v) => v && setActiveView(v as any)}>
+                      <ToggleGroupItem value="overview" aria-label="Overview">Overview</ToggleGroupItem>
+                      <ToggleGroupItem value="analysis" aria-label="Analysis">Analysis</ToggleGroupItem>
+                      <ToggleGroupItem value="summary" aria-label="Summary">Summary</ToggleGroupItem>
                     </ToggleGroup>
                   </div>
 
-                  <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-2 space-y-6">
-                      {activeTab === "all-investor" && <AllInvestorView data={briefingData} />}
-                      {activeTab === "trend-analysis" && <TrendAnalysisView data={briefingData} />}
+                  {/* Switchable views */}
+                  {activeView === "overview" && (
+                    <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-8">
+                      {/* 60/40 split: left 3, right 2 */}
+                      <div className="lg:col-span-3 space-y-6">
+                        <CompanyOverviewCard profile={briefingData.companyProfile} founders={briefingData.founderInfo} />
+                        {/* Quick TL;DR panel for staged feel */}
+                        <AISidekickChat data={briefingData.aiSummary} />
+                      </div>
+                      <div className="lg:col-span-2 space-y-6">
+                        <NewsFeed title="Latest Company News" items={briefingData.newsFeed} />
+                        <CompetitorNews competitors={briefingData.benchmarkMatrix} />
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {activeView === "analysis" && (
+                    <div className="mt-8">
+                      <AnalysisView data={briefingData} />
+                    </div>
+                  )}
+
+                  {activeView === "summary" && (
+                    <div className="mt-8">
+                      <SummaryView data={briefingData.aiSummary} />
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ) : (
