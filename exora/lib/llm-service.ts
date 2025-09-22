@@ -3,6 +3,7 @@
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
+import { sharedLimiter } from '@/lib/limiter';
 
 export type LlmProvider = 'openai' | 'gemini' | 'groq';
 
@@ -22,31 +23,36 @@ async function generateText(
   try {
     switch (provider) {
       case 'groq':
-        const groq = new Groq({ apiKey });
-        const groqResponse = await groq.chat.completions.create({
-          messages: [{ role: 'user', content: prompt }],
-          // 🔧 FIXED: Use a supported and fast model
-          model: model || 'llama-3.1-8b-instant', 
-          temperature: 0.1,
+        return await sharedLimiter.schedule(async () => {
+          const groq = new Groq({ apiKey });
+          const groqResponse = await groq.chat.completions.create({
+            messages: [{ role: 'user', content: prompt }],
+            model: model || 'llama-3.1-8b-instant',
+            temperature: 0.1,
+          });
+          return groqResponse.choices[0]?.message?.content || '';
         });
-        return groqResponse.choices[0]?.message?.content || '';
       case 'openai':
-        const openai = new OpenAI({ apiKey });
-        const openaiResponse = await openai.chat.completions.create({
-          messages: [{ role: 'user', content: prompt }],
-          model: model || 'gpt-4o-mini',
-          temperature: 0.1,
+        return await sharedLimiter.schedule(async () => {
+          const openai = new OpenAI({ apiKey });
+          const openaiResponse = await openai.chat.completions.create({
+            messages: [{ role: 'user', content: prompt }],
+            model: model || 'gpt-4o-mini',
+            temperature: 0.1,
+          });
+          return openaiResponse.choices[0]?.message?.content || '';
         });
-        return openaiResponse.choices[0]?.message?.content || '';
 
       case 'gemini':
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const geminiModel = genAI.getGenerativeModel({ 
-          model: model || 'gemini-2.0-flash', // The best choice for speed/power balance
-          generationConfig: { temperature: 0.1 }
+        return await sharedLimiter.schedule(async () => {
+          const genAI = new GoogleGenerativeAI(apiKey);
+          const geminiModel = genAI.getGenerativeModel({
+            model: model || 'gemini-2.0-flash',
+            generationConfig: { temperature: 0.1 }
+          });
+          const result = await geminiModel.generateContent(prompt);
+          return result.response.text();
         });
-        const result = await geminiModel.generateContent(prompt);
-        return result.response.text();
 
       default:
         throw new Error(`Unsupported LLM provider: ${provider}`);

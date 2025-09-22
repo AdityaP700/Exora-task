@@ -1,32 +1,35 @@
 // lib/exa-service.ts
+import { sharedLimiter } from '@/lib/limiter';
 const EXA_API_URL = 'https://api.exa.ai/search';
 
 // 🔧 FIXED: Add delay function for rate limiting
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function exaSearch(apiKey: string, requestBody: object): Promise<any> {
-  try {
-    const response = await fetch(EXA_API_URL, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-    
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error('Exa API Error:', errorBody);
-      throw new Error(`Exa API request failed with status ${response.status}`);
+  return sharedLimiter.schedule(async () => {
+    try {
+      const response = await fetch(EXA_API_URL, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        console.error('Exa API Error:', errorBody);
+        throw new Error(`Exa API request failed with status ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Failed to fetch from Exa API:', error);
+      throw error;
     }
-    
-    return response.json();
-  } catch (error) {
-    console.error('Failed to fetch from Exa API:', error);
-    throw error;
-  }
+  });
 }
 
 const getPastDate = (days: number): string => {

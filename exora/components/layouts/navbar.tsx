@@ -8,9 +8,7 @@ import { HoverButton } from "@/components/ui/hover-button"
 
 export function Navbar() {
   const navItems = [
-    { name: "Home", icon: Home },
     { name: "Search", icon: Search },
-    { name: "Readme", icon: BookOpen },
     { name: "GitHub", icon: Github },
   ]
 
