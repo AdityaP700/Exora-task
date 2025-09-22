@@ -77,14 +77,7 @@ export function AIInputWithSearch({
 
           <div className="h-12 bg-black/5 dark:bg-white/5 rounded-b-xl">
             <div className="absolute left-3 bottom-3 flex items-center gap-2">
-              <label className="cursor-pointer rounded-lg p-2 bg-black/5 dark:bg-white/5">
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  onChange={handleFileChange}
-                />
-                <Paperclip className="w-4 h-4 text-black/40 dark:text-white/40 hover:text-black dark:hover:text-white transition-colors" />
-              </label>
+
               <button
                 type="button"
                 onClick={() => setShowSearch(!showSearch)}

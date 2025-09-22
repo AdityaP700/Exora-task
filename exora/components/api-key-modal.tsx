@@ -1,27 +1,24 @@
 // components/api-key-modal.tsx
 "use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/Label";
 import { Button } from "@/components/ui/button";
 import { useApiKeyStore } from "@/lib/store";
 import { useState, useEffect } from "react";
+import Link from 'next/link';
 
 export function ApiKeyModal() {
-  const { 
-    isModalOpen, closeModal, setKeys, 
-    exaApiKey, groqApiKey, geminiApiKey, openAiApiKey 
-  } = useApiKeyStore();
-
-  const [keys, setLocalKeys] = useState({ exaApiKey, groqApiKey, geminiApiKey, openAiApiKey });
+  const { isModalOpen, closeModal, setKeys, ...apiKeys } = useApiKeyStore();
+  const [localKeys, setLocalKeys] = useState(apiKeys);
 
   useEffect(() => {
-    setLocalKeys({ exaApiKey, groqApiKey, geminiApiKey, openAiApiKey });
-  }, [isModalOpen, exaApiKey, groqApiKey, geminiApiKey, openAiApiKey]);
+    setLocalKeys(apiKeys);
+  }, [isModalOpen, apiKeys]);
 
   const handleSave = () => {
-    setKeys(keys);
+    setKeys(localKeys);
     closeModal();
   };
 
@@ -29,28 +26,43 @@ export function ApiKeyModal() {
     <Dialog open={isModalOpen} onOpenChange={closeModal}>
       <DialogContent className="sm:max-w-[525px] bg-card border-border">
         <DialogHeader>
-          <DialogTitle>Add Your API Keys To Start</DialogTitle>
+          <DialogTitle>Add Your API Keys to Start</DialogTitle>
+          <DialogDescription>
+            Your keys are stored in your browser and never leave your device. Exa is required.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="exa-key" className="text-right">Exa API Key</Label>
-            <Input id="exa-key" value={keys.exaApiKey} onChange={(e) => setLocalKeys({...keys, exaApiKey: e.target.value})} className="col-span-3" placeholder="(Required)" />
+          <div className="space-y-2">
+            <Label htmlFor="exa-key">Exa API Key <span className="text-red-500">*</span></Label>
+            <Input id="exa-key" value={localKeys.exaApiKey} onChange={(e) => setLocalKeys({...localKeys, exaApiKey: e.target.value})} placeholder="Required for all searches" />
+            <Link href="https://dashboard.exa.ai/login" target="_blank" className="text-xs text-blue-500 hover:underline">
+              Get your Exa API key
+            </Link>
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="groq-key" className="text-right">Groq API Key</Label>
-            <Input id="groq-key" value={keys.groqApiKey} onChange={(e) => setLocalKeys({...keys, groqApiKey: e.target.value})} className="col-span-3" />
+          <div className="space-y-2">
+            <Label htmlFor="gemini-key">Google Gemini API Key</Label>
+            <Input id="gemini-key" value={localKeys.geminiApiKey} onChange={(e) => setLocalKeys({...localKeys, geminiApiKey: e.target.value})} placeholder="Optional, for AI analysis" />
+            <Link href="https://aistudio.google.com/app/apikey" target="_blank" className="text-xs text-blue-500 hover:underline">
+              Get your Gemini API key
+            </Link>
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="gemini-key" className="text-right">Gemini API Key</Label>
-            <Input id="gemini-key" value={keys.geminiApiKey} onChange={(e) => setLocalKeys({...keys, geminiApiKey: e.target.value})} className="col-span-3" />
+          <div className="space-y-2">
+            <Label htmlFor="openai-key">OpenAI API Key</Label>
+            <Input id="openai-key" value={localKeys.openAiApiKey} onChange={(e) => setLocalKeys({...localKeys, openAiApiKey: e.target.value})} placeholder="Optional, fallback for analysis" />
+            <Link href="https://platform.openai.com/api-keys" target="_blank" className="text-xs text-blue-500 hover:underline">
+              Get your OpenAI API key
+            </Link>
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="openai-key" className="text-right">OpenAI API Key</Label>
-            <Input id="openai-key" value={keys.openAiApiKey} onChange={(e) => setLocalKeys({...keys, openAiApiKey: e.target.value})} className="col-span-3" />
+          <div className="space-y-2">
+            <Label htmlFor="groq-key">Groq API Key</Label>
+            <Input id="groq-key" value={localKeys.groqApiKey} onChange={(e) => setLocalKeys({...localKeys, groqApiKey: e.target.value})} placeholder="Optional, for fast TL;DRs" />
+            <Link href="https://console.groq.com/keys" target="_blank" className="text-xs text-blue-500 hover:underline">
+              Get your Groq API key
+            </Link>
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={handleSave}>Save API Keys</Button>
+          <Button onClick={handleSave}>Save Keys</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

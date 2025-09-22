@@ -112,34 +112,33 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const rawDomain = searchParams.get('domain');
 
+  // 🔧 FIXED: Get API keys ONLY from the server's .env.local file.
+  const exaApiKey = process.env.EXA_API_KEY;
+  const groqApiKey = process.env.GROQ_API_KEY;
+  const openAiApiKey = process.env.OPENAI_API_KEY;
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+
   if (!rawDomain) {
     return NextResponse.json({ error: 'Missing domain parameter' }, { status: 400 });
+  }
+  // 🔧 FIXED: Check for server-side keys now.
+  if (!exaApiKey) {
+    return NextResponse.json({ error: 'Missing EXA_API_KEY in the server environment (.env.local)' }, { status: 500 });
   }
 
   const domain = rawDomain.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '').trim();
   console.log(`🏢 Processing domain: "${rawDomain}" → cleaned: "${domain}"`);
-
-  const exaApiKey = request.headers.get('x-exa-api-key');
-  const groqApiKey = request.headers.get('x-groq-api-key');
-  const openAiApiKey = request.headers.get('x-openai-api-key');
-  const geminiApiKey = request.headers.get('x-gemini-api-key');
-
-  if (!domain || !exaApiKey) {
-    return NextResponse.json({ error: 'Missing domain or Exa API key' }, { status: 400 });
-  }
-  if (!groqApiKey && !openAiApiKey && !geminiApiKey) {
-    return NextResponse.json({ error: 'At least one LLM API key is required' }, { status: 400 });
-  }
-
+  
   try {
       const llmProviders: ProviderConfig[] = [
-          { provider: 'gemini', apiKey: geminiApiKey ?? undefined },
-          { provider: 'openai', apiKey: openAiApiKey ?? undefined }
+          { provider: 'gemini', apiKey: geminiApiKey },
+          { provider: 'openai', apiKey: openAiApiKey }
       ];
       const groqProviders: ProviderConfig[] = [
-          { provider: 'groq', apiKey: groqApiKey ?? undefined },
-          { provider: 'gemini', apiKey: geminiApiKey ?? undefined }
+          { provider: 'groq', apiKey: groqApiKey },
+          { provider: 'gemini', apiKey: geminiApiKey }
       ];
+
 
     // --- Step 1: Improved Groq TL;DR ---
     const groqTlDrPrompt = `What is the company at the domain "${domain}"? Provide a brief, factual description of what they do in one sentence. If you're not familiar with this specific company, make a reasonable inference based on the domain name and provide a general business description.`;
