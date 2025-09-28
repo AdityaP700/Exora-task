@@ -1,33 +1,33 @@
 // app/api/briefing/route.ts
 
 import { NextResponse } from 'next/server';
-import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-service'; 
+import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-service';
 import { fetchExaData, fetchHistoricalData } from '@/lib/exa-service';
-import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData } from '@/lib/analysis-service';
+import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData, generateEnhancedSentimentAnalysis } from '@/lib/analysis-service';
 import { normalizePublishedDate } from '@/lib/utils';
 import { BriefingResponse, EventType, CompanyProfile, FounderInfo } from '@/lib/types';
 
 // --- HELPER FUNCTIONS ---
 
 function getIndustryDefaults(domain: string): string[] {
-    if (domain.includes('ai') || domain.includes('tech')) return ['openai.com', 'anthropic.com', 'google.com'];
-    if (domain.includes('shop') || domain.includes('store')) return ['shopify.com', 'amazon.com', 'ebay.com'];
-    if (domain.includes('pay') || domain.includes('bank')) return ['paypal.com', 'stripe.com', 'square.com'];
-    return ['google.com', 'microsoft.com', 'amazon.com'];
+  if (domain.includes('ai') || domain.includes('tech')) return ['openai.com', 'anthropic.com', 'google.com'];
+  if (domain.includes('shop') || domain.includes('store')) return ['shopify.com', 'amazon.com', 'ebay.com'];
+  if (domain.includes('pay') || domain.includes('bank')) return ['paypal.com', 'stripe.com', 'square.com'];
+  return ['google.com', 'microsoft.com', 'amazon.com'];
 }
 
 function parseCompetitorResponse(text: string): string[] {
-    const jsonMatch = text.match(/\[[\s\S]*?\]/);
-    if (jsonMatch) {
-        try { return JSON.parse(jsonMatch[0]); } catch {}
-    }
-    const domainMatches = text.match(/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
-    return domainMatches ? domainMatches.slice(0, 3) : [];
+  const jsonMatch = text.match(/\[[\s\S]*?\]/);
+  if (jsonMatch) {
+    try { return JSON.parse(jsonMatch[0]); } catch { }
+  }
+  const domainMatches = text.match(/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+  return domainMatches ? domainMatches.slice(0, 3) : [];
 }
 
 async function discoverCompetitors(domain: string, providers: ProviderConfig[]): Promise<string[]> {
   const prompt = `Analyze ONLY the company operating at the exact domain \"${domain}\" (ignore similarly named companies on different TLDs like .finance, .ai, etc.). Identify the top 3 direct competitors. Return ONLY a JSON array of competitor domains.\n\nExamples:\n- stripe.com → ["paypal.com", "square.com", "adyen.com"]\n\nFormat: ["competitor1.com", "competitor2.com", "competitor3.com"]`;
-  
+
   try {
     const result = await safeGenerateJson<string[]>(prompt, providers);
     if (result && Array.isArray(result) && result.length > 0) {
@@ -63,7 +63,7 @@ function validateAndCleanCompetitors(competitors: string[], primaryDomain: strin
 async function getSentimentScore(headlines: string[], groqKey?: string, openAiKey?: string): Promise<number> {
   if (headlines.length === 0) return 50;
   const prompt = `Analyze the sentiment of these headlines about a company. You MUST respond with ONLY a number between 0-100. No words, no explanation.\n\n0 = Very Negative\n50 = Neutral\n100 = Very Positive\n\nHeadlines:\n${headlines.map((h) => `- ${h}`).join('\n')}\n\nResponse (number only):`;
-  
+
   try {
     const scoreText = await safeGenerateText(prompt, [
       { provider: 'groq', apiKey: groqKey },
@@ -94,7 +94,7 @@ function isRelevantToCompany(headline: string, domain: string): boolean {
 async function classifyEventType(title: string, groqKey?: string, openAiKey?: string): Promise<EventType | "Other"> {
   if (!title) return "Other";
   const prompt = `Classify this headline into ONE category: Funding, Product Launch, Acquisition, Layoffs. Return ONLY the category name, no other text.\n\nHeadline: "${title}"`;
-  
+
   try {
     const classification = await safeGenerateText(prompt, [
       { provider: 'groq', apiKey: groqKey },
@@ -126,7 +126,7 @@ async function fetchNewsApiFallback(domain: string, apiKey?: string) {
     const articles = (json.articles || []) as any[]
     // Filter homonyms: keep exact-domain links and trusted news; drop other brand TLDs
     const trustedNews = new Set([
-      'techcrunch.com','wsj.com','bloomberg.com','forbes.com','businessinsider.com','reuters.com','theverge.com','nytimes.com','ft.com','wired.com','cnbc.com','cnn.com','bbc.com'
+      'techcrunch.com', 'wsj.com', 'bloomberg.com', 'forbes.com', 'businessinsider.com', 'reuters.com', 'theverge.com', 'nytimes.com', 'ft.com', 'wired.com', 'cnbc.com', 'cnn.com', 'bbc.com'
     ])
     const getHost = (u: string): string | null => { try { return new URL(u).hostname.toLowerCase() } catch { return null } }
     const target = domain.toLowerCase()
@@ -186,16 +186,16 @@ export async function GET(request: Request) {
 
   const domain = rawDomain.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '').trim();
   console.log(`🏢 Processing domain: "${rawDomain}" → cleaned: "${domain}"`);
-  
+
   try {
-      const llmProviders: ProviderConfig[] = [
-          { provider: 'gemini', apiKey: geminiApiKey },
-          { provider: 'openai', apiKey: openAiApiKey }
-      ];
-      const groqProviders: ProviderConfig[] = [
-          { provider: 'groq', apiKey: groqApiKey },
-          { provider: 'gemini', apiKey: geminiApiKey }
-      ];
+    const llmProviders: ProviderConfig[] = [
+      { provider: 'gemini', apiKey: geminiApiKey },
+      { provider: 'openai', apiKey: openAiApiKey }
+    ];
+    const groqProviders: ProviderConfig[] = [
+      { provider: 'groq', apiKey: groqApiKey },
+      { provider: 'gemini', apiKey: geminiApiKey }
+    ];
 
     // --- NEW: Layer 2 - The AI Bouncer ---
     const isCompany = await validateDomainIsCompany(domain, groqProviders)
@@ -208,12 +208,12 @@ export async function GET(request: Request) {
 
 
     // --- Step 1: Improved Groq TL;DR ---
-  const groqTlDrPrompt = `What is the company at the domain "${domain}"? Provide a brief, factual description of what they do in one sentence. If you're not familiar with this specific company, make a reasonable inference based on the domain name and provide a general business description.`;
+    const groqTlDrPrompt = `What is the company at the domain "${domain}"? Provide a brief, factual description of what they do in one sentence. If you're not familiar with this specific company, make a reasonable inference based on the domain name and provide a general business description.`;
     const groqTlDrPromise = safeGenerateText(groqTlDrPrompt, groqProviders)
       .catch(() => `Company analysis for ${domain}`);
-    
+
     const competitorsPromise = discoverCompetitors(domain, llmProviders)
-        .then(raw => validateAndCleanCompetitors(raw, domain));
+      .then(raw => validateAndCleanCompetitors(raw, domain));
 
     const [groqTlDr, competitors] = await Promise.all([groqTlDrPromise, competitorsPromise]);
     const allDomains = [domain, ...competitors];
@@ -230,25 +230,25 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
 
     // --- Step 3: Combined Data Fetch with Historical Data ---
     console.log(`📋 Fetching comprehensive data for domains: ${allDomains.join(', ')}`);
-    
+
     const [mentionsResults, signalsResults, historicalDataResults, profileResult, foundersResult] = await Promise.allSettled([
-        Promise.all(
-          allDomains.map((d, i) => new Promise(resolve => setTimeout(resolve, i * 250)).then(() => {
-            const limit = i === 0 ? 15 : 8; // main company richer, competitors lighter
-            return fetchExaData(d, 'mentions', exaApiKey, { numResults: limit })
-          }))
-        ),
-        fetchExaData(domain, 'signals', exaApiKey),
-        Promise.all(allDomains.map(d => fetchHistoricalData(d, exaApiKey))), // This is slow, but necessary for V1
-        companyProfilePromise,
-        founderInfoPromise
+      Promise.all(
+        allDomains.map((d, i) => new Promise(resolve => setTimeout(resolve, i * 250)).then(() => {
+          const limit = i === 0 ? 15 : 8; // main company richer, competitors lighter
+          return fetchExaData(d, 'mentions', exaApiKey, { numResults: limit })
+        }))
+      ),
+      fetchExaData(domain, 'signals', exaApiKey),
+      Promise.all(allDomains.map(d => fetchHistoricalData(d, exaApiKey))), // This is slow, but necessary for V1
+      companyProfilePromise,
+      founderInfoPromise
     ]);
 
-  const allMentions = (mentionsResults.status === 'fulfilled') ? mentionsResults.value : allDomains.map(() => ({ results: [] }));
-  const primarySignals = (signalsResults.status === 'fulfilled') ? signalsResults.value : { results: [] };
-  const allHistoricalData = (historicalDataResults.status === 'fulfilled') ? historicalDataResults.value : allDomains.map(() => []);
-  const companyProfile = (profileResult.status === 'fulfilled') ? profileResult.value as CompanyProfile : { name: domain.split('.')[0], domain, description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} } as CompanyProfile;
-  const founderInfo = (foundersResult.status === 'fulfilled') ? foundersResult.value as FounderInfo[] : [];
+    const allMentions = (mentionsResults.status === 'fulfilled') ? mentionsResults.value : allDomains.map(() => ({ results: [] }));
+    const primarySignals = (signalsResults.status === 'fulfilled') ? signalsResults.value : { results: [] };
+    const allHistoricalData = (historicalDataResults.status === 'fulfilled') ? historicalDataResults.value : allDomains.map(() => []);
+    const companyProfile = (profileResult.status === 'fulfilled') ? profileResult.value as CompanyProfile : { name: domain.split('.')[0], domain, description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} } as CompanyProfile;
+    const founderInfo = (foundersResult.status === 'fulfilled') ? foundersResult.value as FounderInfo[] : [];
 
     // If Exa mentions are empty, try NewsAPI fallback per domain
     const enhancedMentions = await Promise.all(allDomains.map(async (d, i) => {
@@ -274,7 +274,7 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
         return getSentimentScore(headlines, groqApiKey ?? undefined, openAiApiKey ?? undefined);
       })
     );
-    
+
     // --- Step 4b: Event Log Processing with fallback ---
     const allRawSignals = (primarySignals.results || []);
     // Start with strict relevance; if we got too few, relax the filter
@@ -283,7 +283,7 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
       relevantSignals = allRawSignals.filter((s: any) => !!s.title);
     }
 
-  let finalEventLog;
+    let finalEventLog;
     if (relevantSignals.length > 0) {
       const classifiedEvents = await Promise.all(
         relevantSignals.slice(0, 12).map(async (signal: any) => ({
@@ -303,7 +303,7 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
       const rest = primaryMentions.filter(m => !exact.includes(m))
       const ordered = [...exact, ...rest]
       finalEventLog = ordered.slice(0, 12).map((m: any) => ({
-  date: normalizePublishedDate(m.publishedDate || new Date().toISOString()),
+        date: normalizePublishedDate(m.publishedDate || new Date().toISOString()),
         headline: m.title || 'N/A',
         type: 'Other' as const,
         url: m.url || '#'
@@ -311,12 +311,22 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
     }
 
     // --- Step 4c: Calculate Final Benchmark Matrix (WITH SENTIMENT DATA) ---
+    const enableEnhanced = process.env.ENABLE_ENHANCED_SENTIMENT === 'true'
+
     const benchmarkMatrix = allDomains.map((d, i) => {
       const mentions = enhancedMentions[i]?.results || [];
       const narrativeMomentum = calculateNarrativeMomentum(mentions);
       const sentimentScore = sentimentScores[i];
       const pulseIndex = calculatePulseIndex(narrativeMomentum, sentimentScore);
       const sentimentHistoricalData = generateSentimentHistoricalData(mentions, sentimentScore);
+      const eventsForDomain = i === 0 ? finalEventLog : [] // only primary has classified events right now
+      const enhancedSentiment = enableEnhanced ? generateEnhancedSentimentAnalysis(
+        mentions,
+        eventsForDomain,
+        sentimentScore,
+        narrativeMomentum,
+        { peerVolumes: enhancedMentions.map(m => m.results?.length || 0) }
+      ) : undefined
 
       let topNews: any[];
       if (i === 0) {
@@ -348,27 +358,42 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
         historicalData: allHistoricalData[i] || [],
         sentimentHistoricalData,
         news: topNews,
+        enhancedSentiment,
       };
     });
 
-    // Collect and limit competitor news to max 4 total (most recent first)
-    const allCompetitorNews = benchmarkMatrix
-      .slice(1)
-      .flatMap((company: any) => company.news)
-      .filter((news: any) => news.headline !== 'N/A')
-      .sort((a: any, b: any) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
-      .slice(0, 4);
+    // Refine competitor news: keep 2–4 credible/trending items per competitor
+    const trustedSources = new Set([
+      'techcrunch.com', 'wsj.com', 'bloomberg.com', 'forbes.com', 'businessinsider.com', 'reuters.com', 'theverge.com', 'nytimes.com', 'ft.com', 'wired.com', 'cnbc.com', 'cnn.com', 'bbc.com'
+    ])
 
-    // Update competitor entries with limited news
-    benchmarkMatrix.forEach((company: any, i: number) => {
-      if (i > 0) {
-        const companyNews = allCompetitorNews.filter((news: any) => news.domain === company.domain);
-        company.news = companyNews;
+    benchmarkMatrix.forEach((company: any, i) => {
+      if (i === 0) return // skip primary here
+      const filtered = (company.news || [])
+        .filter((n: any) => n.headline && n.headline !== 'N/A')
+        .map((n: any) => ({
+          ...n,
+          credibility: trustedSources.has((n.source || '').toLowerCase()) ? 1 : 0,
+          freshness: Date.now() - new Date(n.publishedDate).getTime()
+        }))
+        .sort((a: any, b: any) => {
+          // Primary sort: credibility desc, then recency asc
+          if (b.credibility !== a.credibility) return b.credibility - a.credibility
+          return a.freshness - b.freshness
+        })
+        .slice(0, 4)
+      // Guarantee minimum 2: if less than 2 after filtering, fallback to earliest remaining originals
+      if (filtered.length < 2) {
+        const originals = (company.news || []).filter((n: any) => n.headline && n.headline !== 'N/A')
+          .sort((a: any, b: any) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
+          .slice(0, 2)
+        company.news = originals
+      } else {
+        company.news = filtered.map(({ credibility, freshness, ...rest }: any) => rest)
       }
-    });
-
-  // --- Step 5: IMPROVED AI Strategic Synthesis with actual sentiment data ---
-  const superPrompt = `EXECUTIVE BRIEF: Strategic Analysis for ${domain}
+    })
+    // --- Step 5: IMPROVED AI Strategic Synthesis with actual sentiment data ---
+    const superPrompt = `EXECUTIVE BRIEF: Strategic Analysis for ${domain}
 
 You are preparing a board-level strategic assessment. The data below represents real-time competitive intelligence with sentiment analysis across key market players.
 
@@ -399,53 +424,53 @@ REQUIREMENTS:
 
 OUTPUT: 3 bullet points, each starting with "• ";`
 
-  const summaryResponse = await safeGenerateText(
-    superPrompt,
-    [
-      { provider: 'gemini', apiKey: geminiApiKey ?? undefined, model: 'gemini-2.0-flash' },
-      { provider: 'openai', apiKey: openAiApiKey ?? undefined, model: 'gpt-4o' }
-    ]
-  ).catch(() => '');
-    
-  const summaryPoints = summaryResponse.split('\n')
-    .map(l => l.trim())
-    .filter(l => l.startsWith('•') && l.length > 10)
-    .slice(0, 3);
-    
-  if (summaryPoints.length === 0) {
-    const primarySentiment = benchmarkMatrix[0]?.sentimentScore || 50;
-    const avgCompetitorSentiment = benchmarkMatrix.slice(1).reduce((acc, comp) => acc + comp.sentimentScore, 0) / Math.max(benchmarkMatrix.length - 1, 1);
-        
-    if (primarySentiment > avgCompetitorSentiment + 10) {
-      summaryPoints.push(`• ${domain} shows stronger market sentiment (${primarySentiment}/100) than competitors, indicating positive brand perception and growth potential.`);
-      summaryPoints.push(`• Leverage current positive sentiment momentum to expand market share and strengthen competitive positioning against rivals.`);
-      summaryPoints.push(`• Focus on maintaining sentiment advantage through consistent product innovation and strategic communications to sustain market leadership.`);
-    } else if (primarySentiment < avgCompetitorSentiment - 10) {
-      summaryPoints.push(`• ${domain} sentiment (${primarySentiment}/100) lags competitors, indicating potential brand perception challenges requiring immediate strategic attention.`);
-      summaryPoints.push(`• Implement comprehensive reputation management strategy to address sentiment gap and rebuild market confidence.`);
-      summaryPoints.push(`• Prioritize customer experience improvements and strategic communications to close sentiment deficit with key competitors.`);
-    } else {
-      summaryPoints.push(`• ${domain} maintains competitive sentiment parity (${primarySentiment}/100), suggesting stable market position with room for strategic differentiation.`);
-      summaryPoints.push(`• Balanced competitive landscape creates opportunity for breakthrough initiatives to capture sentiment leadership and market share.`);
-      summaryPoints.push(`• Focus on innovation and unique value proposition to break away from competitor sentiment clustering.`);
+    const summaryResponse = await safeGenerateText(
+      superPrompt,
+      [
+        { provider: 'gemini', apiKey: geminiApiKey ?? undefined, model: 'gemini-2.0-flash' },
+        { provider: 'openai', apiKey: openAiApiKey ?? undefined, model: 'gpt-4o' }
+      ]
+    ).catch(() => '');
+
+    const summaryPoints = summaryResponse.split('\n')
+      .map(l => l.trim())
+      .filter(l => l.startsWith('•') && l.length > 10)
+      .slice(0, 3);
+
+    if (summaryPoints.length === 0) {
+      const primarySentiment = benchmarkMatrix[0]?.sentimentScore || 50;
+      const avgCompetitorSentiment = benchmarkMatrix.slice(1).reduce((acc, comp) => acc + comp.sentimentScore, 0) / Math.max(benchmarkMatrix.length - 1, 1);
+
+      if (primarySentiment > avgCompetitorSentiment + 10) {
+        summaryPoints.push(`• ${domain} shows stronger market sentiment (${primarySentiment}/100) than competitors, indicating positive brand perception and growth potential.`);
+        summaryPoints.push(`• Leverage current positive sentiment momentum to expand market share and strengthen competitive positioning against rivals.`);
+        summaryPoints.push(`• Focus on maintaining sentiment advantage through consistent product innovation and strategic communications to sustain market leadership.`);
+      } else if (primarySentiment < avgCompetitorSentiment - 10) {
+        summaryPoints.push(`• ${domain} sentiment (${primarySentiment}/100) lags competitors, indicating potential brand perception challenges requiring immediate strategic attention.`);
+        summaryPoints.push(`• Implement comprehensive reputation management strategy to address sentiment gap and rebuild market confidence.`);
+        summaryPoints.push(`• Prioritize customer experience improvements and strategic communications to close sentiment deficit with key competitors.`);
+      } else {
+        summaryPoints.push(`• ${domain} maintains competitive sentiment parity (${primarySentiment}/100), suggesting stable market position with room for strategic differentiation.`);
+        summaryPoints.push(`• Balanced competitive landscape creates opportunity for breakthrough initiatives to capture sentiment leadership and market share.`);
+        summaryPoints.push(`• Focus on innovation and unique value proposition to break away from competitor sentiment clustering.`);
+      }
     }
-  }
-  // Log the executive summary for debugging
-  console.log(`📋 Executive Summary Generated:`);
-  summaryPoints.forEach((point, i) => console.log(`   ${i + 1}. ${point}`));
+    // Log the executive summary for debugging
+    console.log(`📋 Executive Summary Generated:`);
+    summaryPoints.forEach((point, i) => console.log(`   ${i + 1}. ${point}`));
 
     // --- Step 6: Bundle Response ---
-  const response: BriefingResponse = {
-    requestDomain: domain,
-    companyProfile: { ...companyProfile, domain },
-    founderInfo,
-    benchmarkMatrix,
-    newsFeed: finalEventLog,
-    aiSummary: {
-      summary: summaryPoints,
-      groqTlDr,
-    },
-  };
+    const response: BriefingResponse = {
+      requestDomain: domain,
+      companyProfile: { ...companyProfile, domain },
+      founderInfo,
+      benchmarkMatrix,
+      newsFeed: finalEventLog,
+      aiSummary: {
+        summary: summaryPoints,
+        groqTlDr,
+      },
+    };
 
     return NextResponse.json(response);
 

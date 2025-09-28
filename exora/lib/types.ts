@@ -40,6 +40,28 @@ export interface SentimentHistoricalDataPoint {
   mentions: number
 }
 
+// --- Enhanced sentiment transparency types ---
+// These are optional, additive structures allowing the system to expose how a score was derived.
+// They are backward compatible: existing sentimentScore remains primary until UI adopts enhancedSentiment.
+export interface SentimentBreakdown {
+  sourceCredibility: number      // 0-100 quality of sources (trusted vs long-tail)
+  recencyWeight: number          // 0-100 weighting derived from how fresh coverage is
+  volumeScore: number            // 0-100 scaled coverage density vs peers
+  languageIntensity: number      // 0-100 strength/polarity of sentiment adjectives/verbs
+  eventImpact: number            // 0-100 effect from impactful classified events (funding, layoffs, etc.)
+  trendDirection: 'improving' | 'declining' | 'stable'
+}
+
+export interface EnhancedSentimentAnalysis {
+  overallScore: number           // 0-100 – canonical sentiment (can mirror sentimentScore)
+  confidence: number             // 0-100 – internal confidence based on data richness & consistency
+  breakdown: SentimentBreakdown  // component subscores
+  factors: string[]              // human-readable bullet factors (e.g. "Recent funding round lifted tone")
+  dataQuality: 'high' | 'medium' | 'low' // heuristic based on volume, recency spread, source diversity
+  analysisMethod: 'ai_enhanced' | 'basic' | 'fallback'
+  lastUpdated: string            // ISO timestamp of computation
+}
+
 export interface BenchmarkMatrixItem {
   domain: string
   pulseIndex: number
@@ -49,6 +71,8 @@ export interface BenchmarkMatrixItem {
   sentimentHistoricalData?: SentimentHistoricalDataPoint[] // NEW: Sentiment-aware historical data
   news: NewsItem[]
   BenchmarkRank?: number
+  // Optional enhanced sentiment transparency payload
+  enhancedSentiment?: EnhancedSentimentAnalysis
 }
 
 export interface EventLogItem {

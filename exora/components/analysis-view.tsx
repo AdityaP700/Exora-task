@@ -28,7 +28,7 @@ export function AnalysisView({ data }: Props) {
       <div className="flex items-center justify-center">
         <ToggleGroup value={tab} onValueChange={(v) => v && setTab(v as any)}>
           <ToggleGroupItem value="comparison" aria-label="Comparison">Comparison</ToggleGroupItem>
-          <ToggleGroupItem value="charts" aria-label="Charts">Charts</ToggleGroupItem>
+          {/* <ToggleGroupItem value="charts" aria-label="Charts">Charts</ToggleGroupItem> */}
         </ToggleGroup>
       </div>
       <div className="space-y-6">

@@ -14,6 +14,7 @@ interface InsightCardProps {
   sentimentScore?: number
   isSpotted?: boolean
   isFrontingInsight?: boolean
+  confidence?: number
 }
 
 export function InsightCard({
@@ -26,6 +27,7 @@ export function InsightCard({
   sentimentScore = 50,
   isSpotted = false,
   isFrontingInsight = false,
+  confidence,
 }: InsightCardProps) {
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
@@ -99,6 +101,11 @@ export function InsightCard({
                   ? "Negative Trend"
                   : "Neutral Trend"}
             </Badge>
+            {typeof confidence === 'number' && (
+              <Badge variant="secondary" className="text-[10px] bg-slate-800 text-slate-300" title="Model confidence in score quality">
+                {Math.round(confidence)}% conf
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-1">{getTrendIcon(trend)}</div>
         </div>
@@ -106,7 +113,7 @@ export function InsightCard({
         {/* Sentiment Score Display */}
         <div className="text-xs text-muted-foreground flex justify-between items-center">
           <span>Sentiment Score</span>
-          <span className="font-medium">{Math.round(sentimentScore)}/100</span>
+          <span className="font-medium" title={typeof confidence === 'number' ? `Confidence: ${Math.round(confidence)}%` : undefined}>{Math.round(sentimentScore)}/100</span>
         </div>
       </div>
     </Card>

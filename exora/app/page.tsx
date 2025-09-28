@@ -13,7 +13,7 @@ import { NewsFeed } from "@/components/news-feed";
 import { CompetitorNews } from "@/components/competitor-news";
 import { AIInputWithSearch } from "@/components/ui/ai-input-with-search";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import type { BriefingResponse, AiSummaryData, CompanyProfile, FounderInfo, BenchmarkMatrixItem, NewsItem, EventLogItem, SentimentHistoricalDataPoint } from "@/lib/types";
+import type { BriefingResponse, AiSummaryData, CompanyProfile, FounderInfo, BenchmarkMatrixItem, NewsItem, EventLogItem, SentimentHistoricalDataPoint, EnhancedSentimentAnalysis } from "@/lib/types";
 import { LoaderFour } from "@/components/ui/loader";
 
 // A skeleton loader that matches the final results layout
@@ -43,7 +43,7 @@ export default function ExoraPage() {
   const [competitors, setCompetitors] = useState<string[]>([])
   const [companyNews, setCompanyNews] = useState<Array<{headline:string;url:string;source?:string;publishedDate?:string}>>([])
   const [competitorNews, setCompetitorNews] = useState<Array<{domain:string;headline:string;url:string;source?:string;publishedDate?:string}>>([])
-  const [benchmark, setBenchmark] = useState<Array<{domain:string;narrativeMomentum:number;sentimentScore:number;pulseIndex:number; sentimentHistoricalData?: SentimentHistoricalDataPoint[]}>>([])
+  const [benchmark, setBenchmark] = useState<Array<{domain:string;narrativeMomentum:number;sentimentScore:number;pulseIndex:number; sentimentHistoricalData?: SentimentHistoricalDataPoint[]; enhancedSentiment?: EnhancedSentimentAnalysis}>>([])
   const [summaryText, setSummaryText] = useState<string>("")
 
   const [isStreaming, setIsStreaming] = useState(false)
@@ -170,8 +170,16 @@ export default function ExoraPage() {
       es.addEventListener('sentiment', (ev: MessageEvent) => {
         try {
           const { benchmark } = JSON.parse(ev.data)
-          setBenchmark(Array.isArray(benchmark) ? benchmark : [])
-        } catch {}
+          if (Array.isArray(benchmark)) {
+            // Debug surface: verify enhancedSentiment propagation in dev tools
+            console.debug('[SSE] sentiment event received – sample item:', benchmark[0]?.domain, benchmark[0]?.enhancedSentiment)
+            setBenchmark(benchmark)
+          } else {
+            setBenchmark([])
+          }
+        } catch (e) {
+          console.warn('[SSE] failed to parse sentiment event', e)
+        }
       })
 
       es.addEventListener('summary', (ev: MessageEvent) => {
@@ -249,6 +257,7 @@ export default function ExoraPage() {
       sentimentScore: b.sentimentScore,
       historicalData: [],
       sentimentHistoricalData: b.sentimentHistoricalData,
+      enhancedSentiment: b.enhancedSentiment, // NEW: propagate enhanced sentiment transparency payload
       news: (newsByDomain.get(b.domain) || []).map(n => ({ headline: n.headline, url: n.url, source: n.source, publishedDate: new Date().toISOString(), date: new Date().toISOString(), type: 'Other' }))
     }))
 

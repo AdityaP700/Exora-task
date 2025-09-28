@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { sharedLimiter } from '@/lib/limiter'
 import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-service'
 import { fetchExaData } from '@/lib/exa-service'
-import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData } from '@/lib/analysis-service'
+import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData, generateEnhancedSentimentAnalysis } from '@/lib/analysis-service'
 import { normalizePublishedDate } from '@/lib/utils'
 
 // Emit SSE event helper
@@ -106,13 +106,39 @@ export async function GET(req: Request) {
         ))
 
         // Flatten, take latest 4 across all competitors
-        const competitorNewsAll = compResults.flatMap((r, idx) => {
+        const trustedSources = new Set([
+          'techcrunch.com','wsj.com','bloomberg.com','forbes.com','businessinsider.com','reuters.com','theverge.com','nytimes.com','ft.com','wired.com','cnbc.com','cnn.com','bbc.com'
+        ])
+        const competitorNewsAllRaw = compResults.flatMap((r, idx) => {
           const d = competitors[idx]
-          return (r.results || []).map((m: any) => ({ domain: d, headline: m.title, url: m.url, source: m.domain, publishedDate: normalizePublishedDate(m.publishedDate || new Date().toISOString()) }))
+          return (r.results || []).map((m: any) => ({
+            domain: d,
+            headline: m.title,
+            url: m.url,
+            source: m.domain,
+            publishedDate: normalizePublishedDate(m.publishedDate || new Date().toISOString())
+          }))
         }).filter(n => n.headline)
-          .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
-          .slice(0, 4)
-        send('competitor-news', { news: competitorNewsAll })
+
+        // Group per competitor and apply filtering (2–4 credible/most recent)
+        const grouped: Record<string, any[]> = {}
+        for (const item of competitorNewsAllRaw) {
+          grouped[item.domain] = grouped[item.domain] || []
+          grouped[item.domain].push(item)
+        }
+        const refined: any[] = []
+        Object.entries(grouped).forEach(([domain, items]) => {
+          const ranked = items.map(n => ({
+            ...n,
+            credibility: trustedSources.has((n.source || '').toLowerCase()) ? 1 : 0,
+            freshness: Date.now() - new Date(n.publishedDate).getTime()
+          })).sort((a,b)=> (b.credibility - a.credibility) || (a.freshness - b.freshness))
+          const slice = ranked.slice(0,4)
+          const finalSlice = slice.length < 2 ? ranked.slice(0,2) : slice
+          refined.push(...finalSlice.map(({credibility,freshness,...rest})=>rest))
+        })
+        // Flatten refined (client groups anyway) but cap global to prevent overload
+        send('competitor-news', { news: refined.slice(0, 12) })
 
         // Stage 5: Sentiment for all domains (main + competitors)
         const allDomains = [domain, ...(competitors || [])]
@@ -123,6 +149,8 @@ export async function GET(req: Request) {
         }))
 
         // Build benchmark rows
+        const enableEnhanced = process.env.ENABLE_ENHANCED_SENTIMENT === 'true'
+        const peerVolumes = allMentions.map(m => (m.results || []).length)
         const benchmark = allDomains.map((d, i) => {
           const mentions = (allMentions[i]?.results || []).map((m: any) => ({
             title: m.title,
@@ -134,7 +162,14 @@ export async function GET(req: Request) {
           const sentiment = sentimentScores[i] || 50
           const pulse = calculatePulseIndex(momentum, sentiment)
           const sentimentHistoricalData = generateSentimentHistoricalData(mentions, sentiment)
-          return { domain: d, narrativeMomentum: momentum, sentimentScore: sentiment, pulseIndex: pulse, sentimentHistoricalData }
+          const enhancedSentiment = enableEnhanced ? generateEnhancedSentimentAnalysis(
+            mentions,
+            i === 0 ? [] : [], // placeholder: could include events when streaming adds them earlier
+            sentiment,
+            momentum,
+            { peerVolumes }
+          ) : undefined
+          return { domain: d, narrativeMomentum: momentum, sentimentScore: sentiment, pulseIndex: pulse, sentimentHistoricalData, enhancedSentiment }
         })
         send('sentiment', { benchmark })
 
