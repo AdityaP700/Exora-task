@@ -302,7 +302,15 @@ export default function ExoraPage() {
     return {
       requestDomain: domain,
       companyProfile: profile,
-      founderInfo: founders,
+      founderInfo: (() => {
+        // Basic heuristic: if any names contain CEO/CTO markers, pick them, else first two
+  const augmented = founders.map(f => ({ orig: f, lower: f.name.toLowerCase() }))
+  const ceo = augmented.find(f => /ceo/.test(f.lower))?.orig
+  const cto = augmented.find(f => /cto/.test(f.lower))?.orig
+  let picked: typeof founders = [ceo, cto].filter(Boolean) as any
+  if (picked.length === 0) picked = founders.slice(0,2)
+  return picked
+      })(),
       benchmarkMatrix,
       newsFeed: companyNewsItems,
       aiSummary
@@ -310,6 +318,8 @@ export default function ExoraPage() {
   }, [profile, benchmark, overview, summaryText, domain, founders, competitors, companyNews, competitorNews, companyNewsItems])
 
   const hasStarted = !!overview || isStreaming || !!domain
+  // Keep hero visible above analysis after start (scrollable)
+  const showInlineHero = hasStarted
 
   return (
   <div className="min-h-screen w-full bg-page-background text-white relative overflow-hidden">
@@ -324,6 +334,18 @@ export default function ExoraPage() {
       <Navbar />
 
       <main className="p-6">
+        {showInlineHero && (
+          <div id="hero-banner" className="mb-12 scroll-mt-6">
+            <div className="text-center max-w-4xl mx-auto">
+              <h1 className="text-3xl md:text-5xl font-bold text-slate-50 tracking-tight mb-2">
+                Decode <span className="text-slate-300">Any Competitor</span>. Instantly.
+              </h1>
+              <p className="text-sm md:text-base text-slate-400 max-w-2xl mx-auto">
+                Stay oriented: scroll anytime to revisit your starting point or launch a new analysis.
+              </p>
+            </div>
+          </div>
+        )}
         <AnimatePresence mode="wait">
           {error ? (
             <motion.div
@@ -416,7 +438,7 @@ export default function ExoraPage() {
                       </div>
                       <div className="lg:col-span-2 space-y-6">
                         <MarketSentimentOverview />
-                        <AiAssistant />
+                        {/* <AiAssistant /> */}
                       </div>
                     </div>
                   </div>
@@ -428,6 +450,7 @@ export default function ExoraPage() {
                       <CompanyOverviewCard
                         profile={analysisData.companyProfile}
                         founders={analysisData.founderInfo}
+                        sentimentScore={analysisData.benchmarkMatrix?.[0]?.sentimentScore}
                       />
                     </div>
                     <div className="space-y-6">
@@ -444,7 +467,15 @@ export default function ExoraPage() {
 
                 {activeView === "summary" && analysisData && (
                   <div className="mt-8">
-                    <SummaryView data={analysisData.aiSummary} />
+                    <SummaryView
+                      data={analysisData.aiSummary}
+                      context={{
+                        domain: analysisData.requestDomain,
+                        description: analysisData.companyProfile.description,
+                        sentiment: analysisData.benchmarkMatrix?.[0]?.sentimentScore,
+                        competitors: analysisData.benchmarkMatrix.slice(1).map(c=>({ domain: c.domain, sentiment: c.sentimentScore }))
+                      }}
+                    />
                   </div>
                 )}
               </div>

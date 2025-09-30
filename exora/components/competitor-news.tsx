@@ -7,7 +7,7 @@ export function CompetitorNews({ competitors }: { competitors: BenchmarkMatrixIt
   const hasNews = competitors.some(c => c.news && c.news.length > 0);
 
   return (
-    <div className="bg-[#1E293B] border border-white/5 rounded-xl p-7">
+    <div className="bg-[#1E293B] border border-white/5 rounded-xl p-7 backdrop-blur-sm">
       {/* Header */}
       <div className="mb-5 flex justify-between items-center">
         <div>

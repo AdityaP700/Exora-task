@@ -1,12 +1,12 @@
 "use client"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import type { AiSummaryData } from "@/lib/types"
+import type { AiSummaryData, BriefingResponse } from "@/lib/types"
 import { Loader2, FileDown, Share2, Sparkles } from "lucide-react"
 
-type Props = { data: AiSummaryData }
+type Props = { data: AiSummaryData; context?: { domain: string; sentiment?: number; competitors?: { domain: string; sentiment: number }[]; description?: string } }
 
-export function SummaryView({ data }: Props) {
+export function SummaryView({ data, context }: Props) {
   const [showExecSummary, setShowExecSummary] = useState(false)
   useEffect(() => {
     const t = setTimeout(() => setShowExecSummary(true), 1200)
@@ -64,10 +64,31 @@ export function SummaryView({ data }: Props) {
 
       {/* Content */}
       <div className="space-y-6">
-        {/* TL;DR Section */}
-        <div>
-          <h3 className="text-sm font-semibold text-cyan-400 mb-2">TL;DR</h3>
-          <p className="text-slate-300 text-sm leading-relaxed">{data.groqTlDr}</p>
+        {/* TL;DR Section (restored & enriched) */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-cyan-400">TL;DR</h3>
+          <p className="text-slate-300 text-sm leading-relaxed">
+            {context?.description || data.groqTlDr || 'Overview not available.'}
+          </p>
+          {context && (
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              {typeof context.sentiment === 'number' && (
+                <span className="px-2 py-1 rounded bg-blue-500/10 border border-blue-400/20 text-blue-300">Sentiment {Math.round(context.sentiment)}/100</span>
+              )}
+              {context.competitors && context.competitors.length > 0 && (
+                <span className="px-2 py-1 rounded bg-slate-700/40 text-slate-300 border border-white/5">
+                  Avg Competitors {Math.round(context.competitors.reduce((a,c)=>a+c.sentiment,0)/context.competitors.length)}/100
+                </span>
+              )}
+              {context.competitors && context.competitors.length > 0 && typeof context.sentiment === 'number' && (
+                (() => {
+                  const avg = context.competitors.reduce((a,c)=>a+c.sentiment,0)/context.competitors.length
+                  const diff = context.sentiment - avg
+                  return <span className="px-2 py-1 rounded bg-indigo-500/10 border border-indigo-400/20 text-indigo-300">Δ vs peers {diff>0?'+':''}{Math.round(diff)}</span>
+                })()
+              )}
+            </div>
+          )}
         </div>
 
         {/* Divider */}
@@ -75,7 +96,7 @@ export function SummaryView({ data }: Props) {
 
         {/* Key Points Section */}
         <div>
-          <h3 className="text-sm font-semibold text-cyan-400 mb-3">Key Points</h3>
+          <h3 className="text-sm font-semibold text-cyan-400 mb-3">Strategic Points</h3>
           {showExecSummary ? (
             <ul className="space-y-2">
               {points.map((s, i) => (
