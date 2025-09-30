@@ -94,6 +94,7 @@ export interface BriefingResponse {
   benchmarkMatrix: BenchmarkMatrixItem[]
   newsFeed: EventLogItem[]
   aiSummary: AiSummaryData
+  className : string
 }
 
 // Additional utility types for chart components

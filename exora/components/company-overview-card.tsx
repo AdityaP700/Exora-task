@@ -35,91 +35,86 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
   const paragraphs = (profile.description || '').split(/\n\n|(?<=[.!?])\s+(?=[A-Z])/).filter(p=>p.trim()).slice(0,3)
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Identity Section */}
-      <section aria-labelledby="identity" className="glass sketch-border rounded-xl p-5 hover-glow">
-        <header className="mb-4 flex items-start justify-between">
-          <div>
-            <h2 id="identity" className="font-mono text-[11px] tracking-wider text-amber-300/90 mb-1">IDENTITY</h2>
-            <h1 className="text-2xl font-bold text-cyan-300 leading-tight">{profile.name}</h1>
-            <a href={`https://${displayDomain}`} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400/80 hover:text-cyan-300 underline-offset-2">
-              {displayDomain}
-            </a>
-          </div>
-          {typeof sentimentScore === 'number' && (
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Sentiment</span>
-              <div className="px-3 py-1 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-300 text-xs font-medium">
-                {Math.round(sentimentScore)}/100
-              </div>
+    <section className="glass rounded-2xl p-6 backdrop-blur-md bg-gradient-to-br from-slate-900/60 to-slate-800/40 border border-white/10 shadow-xl space-y-8">
+      <header className="flex items-start justify-between">
+        <div>
+          <h2 className="text-[11px] tracking-wider text-slate-400 mb-1">COMPANY OVERVIEW</h2>
+          <h1 className="text-2xl font-semibold text-slate-100 leading-tight">{profile.name}</h1>
+          <a href={`https://${displayDomain}`} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400/80 hover:text-cyan-300 underline-offset-2">
+            {displayDomain}
+          </a>
+        </div>
+        {typeof sentimentScore === 'number' && (
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Sentiment</span>
+            <div className="px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 text-xs font-medium">
+              {Math.round(sentimentScore)}/100
             </div>
-          )}
-        </header>
-      </section>
-
-      {/* Trust Anchors */}
-      <section aria-labelledby="trust" className="glass sketch-border rounded-xl p-4 hover-glow">
-        <h2 id="trust" className="font-mono text-[11px] tracking-wider text-amber-300/90 mb-3 flex items-center gap-1"><Shield className="w-3 h-3"/>TRUST ANCHORS</h2>
-        <div className="flex flex-wrap gap-2">
-          {socialLinks.map((link, i) => (
-            <a key={i} href={link!.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/40 hover:bg-slate-700/50 text-slate-300 text-xs transition-colors">
-              {link && <link.icon className="w-4 h-4 text-amber-300" />}
-              <span className="truncate max-w-[110px]">{new URL(link!.href).hostname.replace(/^www\./,'')}</span>
-            </a>
-          ))}
-        </div>
-      </section>
-
-      {/* Essence */}
-      <section aria-labelledby="essence" className="glass sketch-border rounded-xl p-5 hover-glow">
-        <h2 id="essence" className="font-mono text-[11px] tracking-wider text-amber-300/90 mb-3">ESSENCE</h2>
-        <div className="space-y-3 text-sm leading-relaxed text-slate-300">
-          {paragraphs.length ? paragraphs.map((p,i)=>(<p key={i}>{p}</p>)) : <p className="italic text-slate-500">No description available.</p>}
-        </div>
-      </section>
-
-      {/* Snapshot */}
-      <section aria-labelledby="snapshot" className="glass sketch-border rounded-xl p-5 hover-glow">
-        <h2 id="snapshot" className="font-mono text-[11px] tracking-wider text-amber-300/90 mb-3">SNAPSHOT</h2>
-        <ul className="space-y-2 text-sm text-slate-300">
-          {details.map((d,i)=>(
-            <li key={i} className="flex items-center gap-2">
-              <d.icon className="w-4 h-4 text-amber-300" />
-              <span>{d.value}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* Humans */}
-      <section aria-labelledby="humans" className="glass sketch-border rounded-xl p-5 hover-glow">
-        <h2 id="humans" className="font-mono text-[11px] tracking-wider text-amber-300/90 mb-4">HUMANS</h2>
-        {founders && founders.length > 0 ? (
-          <div className="grid grid-cols-1 gap-3">
-            {founders.map((f,i)=>{
-              const social = f.linkedin || f.twitter
-              const Icon = f.linkedin ? Linkedin : (f.twitter ? Twitter : null)
-              return (
-                <div key={i} className="group relative rounded-lg border border-amber-400/30 bg-slate-800/30 px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500/40 to-blue-500/30 flex items-center justify-center text-[11px] text-cyan-200 font-medium">
-                      {f.name.split(/\s+/).slice(0,2).map(n=>n[0]).join('')}
-                    </div>
-                    <span className="text-sm text-slate-200 truncate">{f.name}</span>
-                  </div>
-                  {social && Icon && (
-                    <a href={social} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-amber-300 transition-colors ml-3 flex-shrink-0">
-                      <Icon className="w-4 h-4" />
-                    </a>
-                  )}
-                </div>
-              )
-            })}
           </div>
-        ) : (
-          <p className="text-xs text-slate-500">Leadership data not available.</p>
         )}
-      </section>
-    </div>
+      </header>
+
+      <div className="space-y-5">
+        <div>
+          <h3 className="text-[11px] tracking-wider text-slate-500 mb-2 flex items-center gap-1"><Shield className="w-3 h-3" />TRUST ANCHORS</h3>
+          <div className="flex flex-wrap gap-2">
+            {socialLinks.map((link, i) => (
+              <a key={i} href={link!.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs transition-colors border border-white/10">
+                {link && <link.icon className="w-4 h-4 text-cyan-300" />}
+                <span className="truncate max-w-[110px]">{new URL(link!.href).hostname.replace(/^www\./,'')}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-[11px] tracking-wider text-slate-500 mb-2">ESSENCE</h3>
+          <div className="space-y-3 text-sm leading-relaxed text-slate-300">
+            {paragraphs.length ? paragraphs.map((p,i)=>(<p key={i}>{p}</p>)) : <p className="italic text-slate-500">No description available.</p>}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-[11px] tracking-wider text-slate-500 mb-2">SNAPSHOT</h3>
+          <ul className="space-y-2 text-sm text-slate-300">
+            {details.map((d,i)=>(
+              <li key={i} className="flex items-center gap-2">
+                <d.icon className="w-4 h-4 text-cyan-300" />
+                <span>{d.value}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-[11px] tracking-wider text-slate-500 mb-2">HUMANS</h3>
+          {founders && founders.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3">
+              {founders.map((f,i)=>{
+                const social = f.linkedin || f.twitter
+                const Icon = f.linkedin ? Linkedin : (f.twitter ? Twitter : null)
+                return (
+                  <div key={i} className="group relative rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.07] px-4 py-3 flex items-center justify-between transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500/30 to-blue-500/30 flex items-center justify-center text-[11px] text-cyan-200 font-medium">
+                        {f.name.split(/\s+/).slice(0,2).map(n=>n[0]).join('')}
+                      </div>
+                      <span className="text-sm text-slate-200 truncate">{f.name}</span>
+                    </div>
+                    {social && Icon && (
+                      <a href={social} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-cyan-300 transition-colors ml-3 flex-shrink-0">
+                        <Icon className="w-4 h-4" />
+                      </a>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">Leadership data not available.</p>
+          )}
+        </div>
+      </div>
+    </section>
   )
 }
