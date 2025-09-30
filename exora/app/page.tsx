@@ -16,6 +16,13 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { BriefingResponse, AiSummaryData, CompanyProfile, FounderInfo, BenchmarkMatrixItem, NewsItem, EventLogItem, SentimentHistoricalDataPoint, EnhancedSentimentAnalysis } from "@/lib/types";
 import { LoaderFour } from "@/components/ui/loader";
 
+import { PrimarySentimentCard } from "@/components/primary-sentiment-card";
+import { CompetitorSentimentCard } from "@/components/competitor-sentiment-card";
+import { DetailedSentimentAnalysis } from "@/components/detailed-sentiment-analysis";
+import { CompetitorSentimentComparison } from "@/components/competitor-sentiment-comparison";
+import { MarketSentimentOverview } from "@/components/market-sentiment-overview";
+import { AiAssistant } from "@/components/ai-assistant";
+
 // A skeleton loader that matches the final results layout
 function DashboardSkeleton() {
   return (
@@ -36,11 +43,11 @@ function DashboardSkeleton() {
 
 export default function ExoraPage() {
   // Staged progressive state
-  const [domain, setDomain] = useState<string>("")
+  const [domain, setDomain] = useState<string>("aramco.com")
   const [overview, setOverview] = useState<string>("")
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [founders, setFounders] = useState<FounderInfo[]>([])
-  const [competitors, setCompetitors] = useState<string[]>([])
+  const [competitors, setCompetitors] = useState<string[]>(['exxonmobil.com', 'shell.com', 'bp.com'])
   const [companyNews, setCompanyNews] = useState<Array<{headline:string;url:string;source?:string;publishedDate?:string}>>([])
   const [competitorNews, setCompetitorNews] = useState<Array<{domain:string;headline:string;url:string;source?:string;publishedDate?:string}>>([])
   const [benchmark, setBenchmark] = useState<Array<{domain:string;narrativeMomentum:number;sentimentScore:number;pulseIndex:number; sentimentHistoricalData?: SentimentHistoricalDataPoint[]; enhancedSentiment?: EnhancedSentimentAnalysis}>>([])
@@ -51,15 +58,18 @@ export default function ExoraPage() {
   // Three-view toggle: overview, analysis, summary
   const [activeView, setActiveView] = useState<
     "overview" | "analysis" | "summary"
-  >("overview");
-  const [lastQuery, setLastQuery] = useState<string>("");
+  >("analysis");
+  const [lastQuery, setLastQuery] = useState<string>("aramco.com");
   const esRef = useRef<EventSource | null>(null)
 
   // Restore last domain on mount
   useEffect(() => {
     try {
       const cachedQuery = localStorage.getItem("exora:lastQuery");
-      if (cachedQuery) setLastQuery(cachedQuery);
+      if (cachedQuery) {
+        setLastQuery(cachedQuery);
+        setDomain(cachedQuery);
+      };
     } catch {}
   }, []);
 
@@ -92,7 +102,7 @@ export default function ExoraPage() {
     setOverview("")
     setProfile(null)
     setFounders([])
-    setCompetitors([])
+    setCompetitors(['exxonmobil.com', 'shell.com', 'bp.com'])
     setCompanyNews([])
     setCompetitorNews([])
     setBenchmark([])
@@ -239,8 +249,20 @@ export default function ExoraPage() {
   }, [competitorNews])
 
   const analysisData: BriefingResponse | null = useMemo(() => {
-    if (!profile) return null
-    if (!benchmark.length) return null
+    if (!profile && domain) {
+      // Create a mock profile if it doesn't exist, to allow rendering the new dashboard
+      const mockProfile: CompanyProfile = {
+        name: domain.split('.')[0],
+        domain: domain,
+        description: `Company at ${domain}`,
+        ipoStatus: 'Unknown',
+        socials: {}
+      };
+      setProfile(mockProfile);
+    }
+  
+    if (!profile) return null;
+
     const domains = [domain, ...competitors]
     // Attach news for main and competitors if available
     const newsByDomain = new Map<string, { headline:string; url:string; source:string }[]>()
@@ -250,7 +272,7 @@ export default function ExoraPage() {
       list.push({ headline: cn.headline, url: cn.url, source: cn.source || 'news' })
       newsByDomain.set(cn.domain, list)
     }
-    const benchmarkMatrix: BenchmarkMatrixItem[] = benchmark.map(b => ({
+    const benchmarkMatrix: BenchmarkMatrixItem[] = benchmark.length > 0 ? benchmark.map(b => ({
       domain: b.domain,
       pulseIndex: b.pulseIndex,
       narrativeMomentum: b.narrativeMomentum,
@@ -259,15 +281,20 @@ export default function ExoraPage() {
       sentimentHistoricalData: b.sentimentHistoricalData,
       enhancedSentiment: b.enhancedSentiment, // NEW: propagate enhanced sentiment transparency payload
       news: (newsByDomain.get(b.domain) || []).map(n => ({ headline: n.headline, url: n.url, source: n.source, publishedDate: new Date().toISOString(), date: new Date().toISOString(), type: 'Other' }))
-    }))
+    })) : domains.map(d => ({
+      domain: d,
+      pulseIndex: 0,
+      narrativeMomentum: 0,
+      sentimentScore: 50,
+      historicalData: [],
+      news: []
+    }));
 
     const aiSummary: AiSummaryData = {
       groqTlDr: overview,
       summary: summaryText
-        .split('\n')
-        .map(l => l.trim())
-        .filter(l => l.startsWith('•') && l.length > 2)
-        .slice(0, 3)
+        ? summaryText.split('\n').map(l => l.trim()).filter(l => l.startsWith('•') && l.length > 2).slice(0,3)
+        : []
     }
 
     return {
@@ -280,44 +307,21 @@ export default function ExoraPage() {
     }
   }, [profile, benchmark, overview, summaryText, domain, founders, competitors, companyNews, competitorNews, companyNewsItems])
 
-  const hasStarted = !!overview || isStreaming
+  const hasStarted = !!overview || isStreaming || !!domain
 
   return (
-  <div className="min-h-screen w-full bg-black relative overflow-hidden">
-    {/* Background Glow */}
+  <div className="min-h-screen w-full bg-page-background text-white relative overflow-hidden">
     <div
       className="absolute inset-0 z-0 opacity-50"
       style={{
-        backgroundImage: `radial-gradient(circle at 50% 30%, rgba(var(--glow-start-rgb), 0.3) 0%, rgba(var(--glow-end-rgb), 0.15) 35%, transparent 60%)`,
+        backgroundImage: `radial-gradient(circle at 50% 30%, rgba(59, 130, 246, 0.1) 0%, rgba(15, 23, 42, 0.1) 35%, transparent 60%)`,
       }}
     />
 
     <div className="relative z-10">
       <Navbar />
 
-      {/* 🔧 FIXED: Always visible hero section */}
-      <div className="container mx-auto px-4 pt-20 pb-8 text-center">
-        <div className="flex justify-center gap-4 mb-6">
-          {/* Optional: Add some icons or badges here */}
-        </div>
-
-        <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-slate-50 tracking-tight">
-          <span className="relative inline-block">
-            Decode
-            <span className="absolute inset-x-0 bottom-0 h-1.5 bg-gradient-to-r from-[var(--circle-start)] to-[var(--circle-end)]" />
-          </span>{" "}
-          Any Competitor.{" "}
-          <span className="text-slate-300">
-            Instantly.
-          </span>
-        </h1>
-
-        <p className="mt-4 max-w-3xl mx-auto text-base md:text-lg text-slate-400 leading-relaxed">
-          <span className="text-slate-300 font-medium">Drop any company URL.</span> Get Quick real-time competitive, market positioning, sentiment analysis, and strategic insights within minutes.
-        </p>
-      </div>
-
-      <main>
+      <main className="p-6">
         <AnimatePresence mode="wait">
           {error ? (
             <motion.div
@@ -353,23 +357,14 @@ export default function ExoraPage() {
               exit={{ opacity: 0 }}
             >
               <div className="container mx-auto px-4">
-                {/* Persistent search */}
-                <div className="w-full max-w-3xl mx-auto mb-6">
+                <div className="w-full max-w-3xl mx-auto mb-8">
                   <AIInputWithSearch
-                    placeholder={lastQuery || "Enter any company URL... (e.g., stripe.com, openai.com)"}
+                    placeholder="Search for another company..."
                     onSubmit={(value) => handleSearch(value)}
-                    className="[& textarea]:h-9 opacity-80 hover:opacity-100 transition-opacity"
+                    className="[& textarea]:h-10"
                   />
                 </div>
 
-                {/* Stage progress helper under input */}
-                {isStreaming && (
-                  <div className="mb-6 flex items-center justify-center gap-3 text-xs text-slate-400">
-                    <LoaderFour text="Streaming results progressively…" />
-                  </div>
-                )}
-
-                {/* Three-toggle under search */}
                 <div className="mb-8 flex items-center justify-center">
                   <ToggleGroup
                     value={activeView}
@@ -387,25 +382,42 @@ export default function ExoraPage() {
                   </ToggleGroup>
                 </div>
 
-                {activeView === "overview" && (
+                {activeView === "analysis" && (
+                  <div className="space-y-6">
+                    {/* Upper Section */}
+                    <div className="flex flex-col lg:flex-row gap-6">
+                      <PrimarySentimentCard />
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {competitors.slice(0, 3).map(c => <CompetitorSentimentCard key={c} companyName={c} />)}
+                      </div>
+                    </div>
+
+                    {/* Lower Section */}
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                      <div className="lg:col-span-3 space-y-6">
+                        <DetailedSentimentAnalysis />
+                        <CompetitorSentimentComparison />
+                      </div>
+                      <div className="lg:col-span-2 space-y-6">
+                        <MarketSentimentOverview />
+                        <AiAssistant />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeView === "overview" && analysisData && (
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-1 space-y-6">
-                      {profile ? (
-                        <CompanyOverviewCard
-                          profile={profile}
-                          founders={founders}
-                        />
-                      ) : (
-                        <div className="p-6 rounded-lg bg-slate-900/50 text-slate-400 text-sm">
-                          <div className="mb-2 font-medium text-slate-300">Company Overview</div>
-                          <div>Preparing overview…</div>
-                        </div>
-                      )}
+                      <CompanyOverviewCard
+                        profile={analysisData.companyProfile}
+                        founders={analysisData.founderInfo}
+                      />
                     </div>
                     <div className="lg:col-span-2 space-y-5">
                       <NewsFeed
                         title="Latest Company News"
-                        items={companyNewsItems}
+                        items={analysisData.newsFeed}
                       />
                       <CompetitorNews
                         competitors={competitorRowsForOverview}
@@ -414,27 +426,9 @@ export default function ExoraPage() {
                   </div>
                 )}
 
-                {activeView === "analysis" && (
+                {activeView === "summary" && analysisData && (
                   <div className="mt-8">
-                    {analysisData ? (
-                      <AnalysisView data={analysisData} />
-                    ) : (
-                      <div className="p-6 rounded-lg bg-slate-900/50 text-slate-400 text-sm flex items-center gap-2">
-                        <LoaderFour text="Computing sentiment and momentum…" />
-                        <span>Charts will appear shortly.</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeView === "summary" && (
-                  <div className="mt-8">
-                    <SummaryView data={{
-                      groqTlDr: overview,
-                      summary: summaryText
-                        ? summaryText.split('\n').map(l => l.trim()).filter(l => l.startsWith('•') && l.length > 2).slice(0,3)
-                        : []
-                    }} />
+                    <SummaryView data={analysisData.aiSummary} />
                   </div>
                 )}
               </div>
@@ -447,8 +441,20 @@ export default function ExoraPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <div className="container mx-auto px-4 pb-24 text-center flex flex-col items-center">
-                {/* 🔧 ENHANCED: More compelling CTA section */}
+              <div className="container mx-auto px-4 pt-20 pb-24 text-center flex flex-col items-center">
+                <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-slate-50 tracking-tight mb-4">
+                  <span className="relative inline-block">
+                    Decode
+                    <span className="absolute inset-x-0 bottom-0 h-1.5 bg-gradient-to-r from-blue-500 to-purple-600" />
+                  </span>{" "}
+                  Any Competitor.{" "}
+                  <span className="text-slate-300">
+                    Instantly.
+                  </span>
+                </h1>
+                <p className="mt-4 max-w-3xl mx-auto text-base md:text-lg text-slate-400 leading-relaxed">
+                  <span className="text-slate-300 font-medium">Drop any company URL.</span> Get Quick real-time competitive, market positioning, sentiment analysis, and strategic insights within minutes.
+                </p>
                 <div className="mt-8 w-full max-w-3xl">
                   <AIInputWithSearch
                     placeholder="Enter any company URL to decode their market position... (e.g., stripe.com)"
@@ -456,7 +462,6 @@ export default function ExoraPage() {
                     className="[& textarea]:h-12 [& textarea]:text-base"
                   />
                   
-                  {/* 🔧 NEW: Popular examples */}
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs">
                     <span className="text-slate-500">Try:</span>
                     {['openai.com', 'stripe.com', 'notion.so', 'figma.com'].map((example) => (
@@ -468,25 +473,6 @@ export default function ExoraPage() {
                         {example}
                       </button>
                     ))}
-                  </div>
-                </div>
-
-                {/* 🔧 NEW: Social proof / features */}
-                <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto text-left">
-                  <div className="text-center md:text-left">
-                    <div className="text-2xl mb-2">🎯</div>
-                    <h3 className="text-slate-200 font-semibold mb-2">Competitive Positioning</h3>
-                    <p className="text-slate-400 text-sm">See exactly how any company stacks up against their key competitors in real-time market analysis.</p>
-                  </div>
-                  <div className="text-center md:text-left">
-                    <div className="text-2xl mb-2">📈</div>
-                    <h3 className="text-slate-200 font-semibold mb-2">Sentiment Intelligence</h3>
-                    <p className="text-slate-400 text-sm">Track brand perception, narrative momentum, and market sentiment across multiple data sources.</p>
-                  </div>
-                  <div className="text-center md:text-left">
-                    <div className="text-2xl mb-2">⚡</div>
-                    <h3 className="text-slate-200 font-semibold mb-2">Instant Strategic Insights</h3>
-                    <p className="text-slate-400 text-sm">Get VC-grade strategic analysis and actionable recommendations in seconds, not weeks.</p>
                   </div>
                 </div>
               </div>

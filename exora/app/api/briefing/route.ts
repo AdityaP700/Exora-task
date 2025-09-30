@@ -330,9 +330,9 @@ Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public
 
       let topNews: any[];
       if (i === 0) {
-        // Main company: Get 3 latest news
+        // Main company: Get 5 latest news
         topNews = (mentions || [])
-          .slice(0, 3)
+          .slice(0, 5)
           .map((m: any) => ({
             headline: m.title || 'N/A',
             url: m.url || '#',
