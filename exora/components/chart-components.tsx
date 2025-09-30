@@ -1,6 +1,6 @@
 "use client"
 import { Card } from "./ui/card"
-import { AreaChart as RAreaChart, Area, CartesianGrid, XAxis, Tooltip as RTooltip, ResponsiveContainer, LineChart, Line, YAxis } from 'recharts'
+import { AreaChart as RAreaChart, Area, CartesianGrid, XAxis, Tooltip as RTooltip, ResponsiveContainer, LineChart, Line, YAxis, BarChart, Bar, Cell } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { TrendingUp, TrendingDown, Minus } from "lucide-react"
 
@@ -74,10 +74,10 @@ export function SentimentChart({ title, data, sentimentScore = 50 }: SentimentCh
                         safeData[safeData.length - 1]?.sentiment < safeData[0]?.sentiment ? 'down' : 'neutral'
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 bg-slate-900/50 border border-white/5 rounded-xl backdrop-blur-sm">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+          <h3 className="text-lg font-semibold text-white">{title}</h3>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-sm text-muted-foreground">
               Avg Sentiment: {Math.round(avgSentiment)}/100
@@ -336,6 +336,62 @@ export function LargeChart({ title, data, timeRange }: LargeChartProps) {
         </div>
         <span className="text-sm text-muted-foreground">{timeRange}</span>
       </div>
+    </Card>
+  )
+}
+
+export function CompetitorSentimentChart({ data }: { data: { domain: string; sentimentScore: number }[] }) {
+  const chartConfig = {
+    sentiment: {
+      label: "Sentiment",
+      color: "hsl(var(--chart-1))",
+    },
+  } satisfies ChartConfig
+
+  const chartData = data.map(item => ({
+    name: item.domain.length > 15 ? `${item.domain.substring(0, 12)}...` : item.domain,
+    sentiment: item.sentimentScore,
+    fill: `hsl(${120 * (item.sentimentScore / 100)}, 70%, 50%)` // Green for high, red for low
+  }));
+
+  return (
+    <Card className="p-6 bg-slate-900/50 border border-white/5 rounded-xl backdrop-blur-sm">
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold text-white">Competitor Sentiment</h3>
+        <p className="text-sm text-slate-400">Sentiment score comparison across tracked competitors.</p>
+      </div>
+      <ChartContainer config={chartConfig} className="h-72 w-full">
+        <ResponsiveContainer>
+          <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20 }}>
+            <CartesianGrid horizontal={false} stroke="rgba(255,255,255,0.1)" />
+            <YAxis 
+              dataKey="name" 
+              type="category" 
+              tickLine={false} 
+              axisLine={false} 
+              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+              width={80}
+            />
+            <XAxis 
+              dataKey="sentiment" 
+              type="number" 
+              domain={[0, 100]} 
+              tickLine={false} 
+              axisLine={false}
+              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+            />
+            <ChartTooltip
+              cursor={false}
+              content={<ChartTooltipContent hideLabel />}
+            />
+            <Bar dataKey="sentiment" radius={5}>
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartContainer>
     </Card>
   )
 }

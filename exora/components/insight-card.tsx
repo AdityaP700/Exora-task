@@ -2,7 +2,7 @@
 import { Card } from "./ui/card"
 import { Badge } from "./ui/badge"
 import { AreaMiniChart } from "./chart-components"
-import { TrendingUp, TrendingDown, Zap } from "lucide-react"
+import { ArrowUp } from "lucide-react"
 
 interface InsightCardProps {
   title: string
@@ -13,7 +13,6 @@ interface InsightCardProps {
   sentimentData?: Array<{ date: string; sentiment: number; mentions: number }>
   sentimentScore?: number
   isSpotted?: boolean
-  isFrontingInsight?: boolean
   confidence?: number
 }
 
@@ -26,94 +25,56 @@ export function InsightCard({
   sentimentData,
   sentimentScore = 50,
   isSpotted = false,
-  isFrontingInsight = false,
   confidence,
 }: InsightCardProps) {
-  const getSentimentColor = (sentiment: string) => {
-    switch (sentiment) {
-      case "positive":
-        return "bg-chart-2 text-white"
-      case "negative":
-        return "bg-chart-3 text-white"
-      default:
-        return "bg-muted text-muted-foreground"
-    }
-  }
 
-  const getTrendIcon = (trend: string) => {
-    switch (trend) {
-      case "up":
-        return <TrendingUp className="w-3 h-3 text-chart-2" />
-      case "down":
-        return <TrendingDown className="w-3 h-3 text-chart-3" />
-      default:
-        return null
-    }
+  const getChartColorVar = () => {
+    if (sentiment === 'positive') return 'var(--chart-2)';
+    if (sentiment === 'negative') return 'var(--chart-3)';
+    return 'var(--chart-1)';
   }
-
-  const getChartColorVar = (sentiment: string) =>
-    sentiment === 'positive' ? 'var(--chart-2)' : sentiment === 'negative' ? 'var(--chart-3)' : 'var(--chart-1)'
 
   return (
-    <Card className="p-4 hover:shadow-lg transition-shadow duration-200">
-      <div className="space-y-3">
+    <Card className="bg-slate-900/50 border border-white/5 rounded-xl p-5 backdrop-blur-sm transition-all duration-200 hover:bg-slate-800/60 hover:border-cyan-400/20 group">
+      <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="flex items-start justify-between">
-          <h3 className="font-semibold text-foreground text-sm leading-tight pr-2">{title}</h3>
+        <div className="flex items-start justify-between mb-2">
+          <h3 className="font-semibold text-white text-lg leading-tight">{title}</h3>
           {isSpotted && (
-            <Badge variant="secondary" className="text-xs bg-accent text-accent-foreground">
-              First Spotted!
-            </Badge>
-          )}
-          {isFrontingInsight && (
-            <Badge variant="secondary" className="text-xs bg-chart-2 text-white">
-              <Zap className="w-3 h-3 mr-1" />
-              Fronting Insight
+            <Badge variant="secondary" className="text-xs bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
+              First Spotted
             </Badge>
           )}
         </div>
+        <p className="text-sm text-slate-400 mb-4">{source}</p>
 
-        {/* Source */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <div className="w-4 h-4 rounded-full bg-muted flex items-center justify-center">
-            <span className="text-xs font-medium">ES</span>
-          </div>
-          <span>Source: {source}</span>
-        </div>
-
-        {/* Chart with Sentiment Data */}
-        <div className="relative">
+        {/* Chart */}
+        <div className="flex-grow my-auto">
           <AreaMiniChart
             series={Array.isArray(data) ? data.map((v, i) => ({ label: String(i + 1), value: typeof v === 'number' ? v : 0 })) : []}
             sentimentData={sentimentData}
-            colorVar={getChartColorVar(sentiment)}
-            height={64}
+            colorVar={getChartColorVar()}
+            height={80}
           />
         </div>
 
-        {/* Status Indicators */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className={`text-xs ${getSentimentColor(sentiment)}`}>
-              {sentiment === "positive"
-                ? "Positive Growth"
-                : sentiment === "negative"
-                  ? "Negative Trend"
-                  : "Neutral Trend"}
-            </Badge>
-            {typeof confidence === 'number' && (
-              <Badge variant="secondary" className="text-[10px] bg-slate-800 text-slate-300" title="Model confidence in score quality">
-                {Math.round(confidence)}% conf
+        {/* Footer */}
+        <div className="mt-4 flex items-end justify-between">
+          <div>
+            <p className="text-sm text-slate-400 capitalize">{trend} Trend</p>
+            {confidence && (
+              <Badge variant="outline" className="mt-1 text-xs border-white/10 text-slate-400">
+                {Math.round(confidence * 100)}% confidence
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-1">{getTrendIcon(trend)}</div>
-        </div>
-
-        {/* Sentiment Score Display */}
-        <div className="text-xs text-muted-foreground flex justify-between items-center">
-          <span>Sentiment Score</span>
-          <span className="font-medium" title={typeof confidence === 'number' ? `Confidence: ${Math.round(confidence)}%` : undefined}>{Math.round(sentimentScore)}/100</span>
+          <div className="text-right">
+            <p className="text-3xl font-bold text-white flex items-center gap-1">
+              {Math.round(sentimentScore)}
+              <span className="text-lg text-slate-400">/100</span>
+              <ArrowUp className="w-4 h-4 text-green-400" />
+            </p>
+          </div>
         </div>
       </div>
     </Card>

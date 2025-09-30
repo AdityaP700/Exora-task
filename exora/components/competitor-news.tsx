@@ -1,91 +1,76 @@
-// components/intelligence-feed.tsx
-"use client";
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { BriefingResponse, BenchmarkMatrixItem, NewsItem } from "@/lib/types";
 import Link from "next/link";
-import { Globe } from "lucide-react";
+import type { BenchmarkMatrixItem, NewsItem } from "@/lib/types";
+import { ExternalLink, Search } from "lucide-react";
+import { formatDistanceToNow } from 'date-fns';
 
-export function IntelligenceFeed({ data }: { data: BriefingResponse }) {
+export function CompetitorNews({ competitors }: { competitors: BenchmarkMatrixItem[] }) {
+  const hasNews = competitors.some(c => c.news && c.news.length > 0);
+
   return (
-    <Card className="bg-card border-border shadow-lg">
-      <Tabs defaultValue="company-news" className="w-full">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-2xl font-bold text-slate-50">Intelligence Feed</CardTitle>
-            <TabsList className="bg-slate-900 border-slate-800">
-              <TabsTrigger value="company-news">Company Signals</TabsTrigger>
-              <TabsTrigger value="competitor-news">Competitor News</TabsTrigger>
-            </TabsList>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <TabsContent value="company-news" className="space-y-4">
-             {data.newsFeed.length > 0 ? data.newsFeed.map((item, i) => (
-                <NewsItem key={i} {...item} />
-             )) : <p className="text-slate-400 text-center py-4">No recent company signals found.</p>}
-          </TabsContent>
-          <TabsContent value="competitor-news" className="space-y-6">
-            {data.benchmarkMatrix.slice(1).map(competitor => (
-              <div key={competitor.domain}>
-                <h4 className="font-semibold text-slate-200 mb-2 flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-cyan-400"/> {competitor.domain}
-                </h4>
-                <div className="space-y-3 border-l-2 border-slate-800 pl-4">
-                  {competitor.news.length > 0 ? competitor.news.map((item, i) => (
-                    <NewsItem key={i} {...item} />
-                  )) : <p className="text-slate-400 text-sm">No recent news found.</p>}
-                </div>
-              </div>
-            ))}
-          </TabsContent>
-        </CardContent>
-      </Tabs>
-    </Card>
-  );
-}
+    <div className="bg-[#1E293B] border border-white/5 rounded-xl p-7">
+      {/* Header */}
+      <div className="mb-5 flex justify-between items-center">
+        <div>
+          <h2 className="text-xl font-semibold text-white">Competitor News</h2>
+          <p className="text-sm text-slate-400">Updates from industry peers</p>
+        </div>
+        {/* Optional: Dropdown can be added here */}
+      </div>
 
-const NewsItem = ({ headline, url, source, type, date }: { headline: string, url: string, source?: string, type?: string, date?: string }) => (
-  <div className="group">
-    <Link href={url} target="_blank" className="text-slate-300 group-hover:text-cyan-400 transition-colors">{headline}</Link>
-    <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-      {source ? (
-        <span>{source}</span>
-      ) : (
-        <span>{date ? new Date(date).toLocaleDateString() : ''}</span>
-      )}
-      {type && type !== "Other" && (
-        <>
-          <span className="text-slate-700">•</span>
-          <span className="font-medium text-cyan-400/70">{type}</span>
-        </>
+      {/* Competitor News Feed */}
+      <div className="space-y-6">
+        {!hasNews ? (
+          <div className="text-center text-slate-500 py-16">
+            <Search className="w-12 h-12 mx-auto mb-4 text-slate-600" />
+            <p className="text-lg font-medium text-slate-400">No Recent Competitor Activity</p>
+            <p className="text-sm text-slate-500">No news detected from tracked competitors.</p>
+          </div>
+        ) : (
+          <>
+            {competitors.slice(0, 3).map((competitor) => (
+              competitor.news && competitor.news.length > 0 && (
+                <div key={competitor.domain}>
+                  <div className="inline-block mb-3">
+                    <div className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
+                      <p className="text-xs font-semibold text-cyan-300">{competitor.domain}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {competitor.news.slice(0, 2).map((item, i) => (
+                      <a
+                        key={i}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block p-3.5 rounded-lg transition-colors duration-150 ease-in-out hover:bg-white/5 border-b border-white/5 last:border-b-0"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="text-sm font-medium text-slate-200 leading-snug mb-1">{item.headline}</h3>
+                            <p className="text-xs text-slate-400">
+                              {item.source || new URL(item.url).hostname} • {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
+                            </p>
+                          </div>
+                          <ExternalLink className="w-4 h-4 text-slate-500 flex-shrink-0 ml-4 mt-1" />
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* View All Link */}
+      {hasNews && (
+        <div className="mt-6 text-right">
+          <Link href="#" className="text-sm font-medium text-cyan-400 hover:underline transition-transform hover:translate-x-1 inline-block">
+            View all competitor news →
+          </Link>
+        </div>
       )}
     </div>
-  </div>
-);
-
-// Back-compat simple competitor news list used in Overview
-export function CompetitorNews({ competitors }: { competitors: BenchmarkMatrixItem[] }) {
-  return (
-    <Card className="p-4 bg-card border-border">
-      <div className="text-sm font-semibold text-foreground mb-3">Competitor News</div>
-      <div className="space-y-4">
-        {competitors.slice(1).map((c) => (
-          <div key={c.domain}>
-            <div className="text-xs font-medium text-muted-foreground mb-1">{c.domain}</div>
-            <div className="space-y-2">
-              {c.news.length > 0 ? (
-                c.news.map((n: NewsItem, i: number) => (
-                  <NewsItem key={i} headline={n.headline} url={n.url} source={n.source} />
-                ))
-              ) : (
-                <div className="text-xs text-muted-foreground">No recent items for this competitor.</div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
   );
 }

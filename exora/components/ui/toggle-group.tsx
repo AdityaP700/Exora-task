@@ -12,7 +12,7 @@ type ToggleGroupProps = {
 
 export function ToggleGroup({ value, onValueChange, className, children }: ToggleGroupProps) {
   return (
-    <div className={cn("inline-flex items-center gap-2 rounded-md bg-muted p-1", className)}>
+    <div className={cn("inline-flex items-center gap-1 rounded-lg bg-card-primary border border-white/10 p-1", className)}>
       {React.Children.map(children, (child) => {
         if (!React.isValidElement(child)) return child
         const childValue = (child.props as any).value as string
@@ -40,8 +40,10 @@ export function ToggleGroupItem({ selected, onSelect, children }: ToggleGroupIte
       type="button"
       onClick={onSelect}
       className={cn(
-        "px-3 py-1.5 text-sm rounded-md transition-colors",
-        selected ? "bg-background border border-border" : "text-muted-foreground hover:text-foreground"
+        "px-4 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ease-in-out",
+        selected
+          ? "bg-accent-blue text-white shadow-sm"
+          : "text-muted-foreground hover:bg-white/5 hover:text-white"
       )}
     >
       {children}

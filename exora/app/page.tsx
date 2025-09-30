@@ -22,6 +22,7 @@ import { DetailedSentimentAnalysis } from "@/components/detailed-sentiment-analy
 import { CompetitorSentimentComparison } from "@/components/competitor-sentiment-comparison";
 import { MarketSentimentOverview } from "@/components/market-sentiment-overview";
 import { AiAssistant } from "@/components/ai-assistant";
+import { FeatureCards } from "@/components/feature-cards";
 
 // A skeleton loader that matches the final results layout
 function DashboardSkeleton() {
@@ -43,11 +44,11 @@ function DashboardSkeleton() {
 
 export default function ExoraPage() {
   // Staged progressive state
-  const [domain, setDomain] = useState<string>("aramco.com")
+  const [domain, setDomain] = useState<string>("")
   const [overview, setOverview] = useState<string>("")
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [founders, setFounders] = useState<FounderInfo[]>([])
-  const [competitors, setCompetitors] = useState<string[]>(['exxonmobil.com', 'shell.com', 'bp.com'])
+  const [competitors, setCompetitors] = useState<string[]>([])
   const [companyNews, setCompanyNews] = useState<Array<{headline:string;url:string;source?:string;publishedDate?:string}>>([])
   const [competitorNews, setCompetitorNews] = useState<Array<{domain:string;headline:string;url:string;source?:string;publishedDate?:string}>>([])
   const [benchmark, setBenchmark] = useState<Array<{domain:string;narrativeMomentum:number;sentimentScore:number;pulseIndex:number; sentimentHistoricalData?: SentimentHistoricalDataPoint[]; enhancedSentiment?: EnhancedSentimentAnalysis}>>([])
@@ -58,18 +59,19 @@ export default function ExoraPage() {
   // Three-view toggle: overview, analysis, summary
   const [activeView, setActiveView] = useState<
     "overview" | "analysis" | "summary"
-  >("analysis");
-  const [lastQuery, setLastQuery] = useState<string>("aramco.com");
+  >("overview");
+  const [lastQuery, setLastQuery] = useState<string>("");
   const esRef = useRef<EventSource | null>(null)
 
-  // Restore last domain on mount
+  // Restore last domain (prompt instead of auto-run)
+  const [resumePrompt, setResumePrompt] = useState(false)
   useEffect(() => {
     try {
       const cachedQuery = localStorage.getItem("exora:lastQuery");
       if (cachedQuery) {
         setLastQuery(cachedQuery);
-        setDomain(cachedQuery);
-      };
+        setResumePrompt(true);
+      }
     } catch {}
   }, []);
 
@@ -384,19 +386,33 @@ export default function ExoraPage() {
 
                 {activeView === "analysis" && (
                   <div className="space-y-6">
-                    {/* Upper Section */}
+                    {/* Upper Section: primary + top competitors */}
                     <div className="flex flex-col lg:flex-row gap-6">
-                      <PrimarySentimentCard />
+                      <PrimarySentimentCard
+                        row={benchmark[0] as any}
+                        loading={isStreaming && !benchmark[0]}
+                      />
                       <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {competitors.slice(0, 3).map(c => <CompetitorSentimentCard key={c} companyName={c} />)}
+                        {benchmark.slice(1,4).map((row,i)=>(
+                          <CompetitorSentimentCard
+                            key={row.domain+ i}
+                            row={row as any}
+                            loading={isStreaming && !row.sentimentHistoricalData}
+                          />
+                        ))}
                       </div>
                     </div>
 
-                    {/* Lower Section */}
+                    {/* Lower Section: detailed + comparison + market + assistant */}
                     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                       <div className="lg:col-span-3 space-y-6">
-                        <DetailedSentimentAnalysis />
-                        <CompetitorSentimentComparison />
+                        <DetailedSentimentAnalysis
+                          row={benchmark[0] as any}
+                          loading={isStreaming && !benchmark[0]?.sentimentHistoricalData}
+                        />
+                        {analysisData && (
+                          <CompetitorSentimentComparison data={analysisData} />
+                        )}
                       </div>
                       <div className="lg:col-span-2 space-y-6">
                         <MarketSentimentOverview />
@@ -407,14 +423,14 @@ export default function ExoraPage() {
                 )}
 
                 {activeView === "overview" && analysisData && (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-1 space-y-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-[35%_65%] gap-8 max-w-[1400px] mx-auto">
+                    <div className="lg:sticky top-24 h-fit">
                       <CompanyOverviewCard
                         profile={analysisData.companyProfile}
                         founders={analysisData.founderInfo}
                       />
                     </div>
-                    <div className="lg:col-span-2 space-y-5">
+                    <div className="space-y-6">
                       <NewsFeed
                         title="Latest Company News"
                         items={analysisData.newsFeed}
@@ -474,8 +490,27 @@ export default function ExoraPage() {
                       </button>
                     ))}
                   </div>
+                  {resumePrompt && lastQuery && (
+                    <div className="mt-6 text-xs text-slate-400 flex flex-col items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-500">Previous analysis:</span>
+                        <code className="bg-slate-800/70 px-2 py-1 rounded text-slate-300">{lastQuery}</code>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { handleSearch(lastQuery); setResumePrompt(false) }}
+                          className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs"
+                        >Resume</button>
+                        <button
+                          onClick={() => { setResumePrompt(false); setDomain("") }}
+                          className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs"
+                        >Dismiss</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
+              <FeatureCards />
             </motion.div>
           )}
         </AnimatePresence>
