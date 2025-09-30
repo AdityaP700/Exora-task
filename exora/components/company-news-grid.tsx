@@ -7,7 +7,7 @@ import { NewsThumbnail } from "@/components/news-thumbnail"
 interface Props { items: EventLogItem[] }
 
 export function CompanyNewsGrid({ items }: Props) {
-  const grid = items.slice(0, 6)
+  const grid = items.slice(0, 3)
   return (
     <section aria-labelledby="company-news" className="glass rounded-2xl p-5 backdrop-blur-md bg-gradient-to-br from-slate-900/60 to-slate-800/40 border border-white/10 shadow-lg">
       <header className="mb-4">

@@ -234,3 +234,74 @@ export async function fetchHistoricalData(domain: string, apiKey: string): Promi
   }
   return datePoints;
 }
+
+// Shared lightweight news scoring
+interface InternalNewsItem { title?: string; url?: string; publishedDate?: string; credibility?: number; domain?: string }
+export function scoreNewsItem(item: InternalNewsItem) {
+  const now = Date.now();
+  let published = Date.now();
+  if (item.publishedDate) {
+    const t = new Date(item.publishedDate).getTime();
+    if (!Number.isNaN(t)) published = t;
+  }
+  const ageHours = (now - published) / 36e5;
+  const freshness = Math.pow(0.5, ageHours / 72); // half-life ~72h
+  const cred = (item.credibility ?? 0) / 2; // 0,0.5,1 scale
+  const title = (item.title || '').toLowerCase();
+  let topical = 0;
+  if (/funding|raises|series [abc]|seed round|acquire|acquisition|merg(er|es)|partnership|launch(es|ed)?|expansion/.test(title)) topical += 0.6;
+  if (/announc(es|ed)|introduc(es|ed)|unveil(s|ed)/.test(title)) topical += 0.3;
+  if (topical > 1) topical = 1;
+  const score = (0.5 * freshness) + (0.3 * cred) + (0.2 * topical);
+  return { score, freshness, cred, topical };
+}
+
+// Focused company news (distinct from generic mentions) with fallback queries & credibility ranking + unified scoring
+export async function fetchCompanyNews(domain: string, apiKey: string, opts?: { limit?: number }): Promise<{ results: any[] }> {
+  const limit = Math.max(1, Math.min(3, opts?.limit ?? 3));
+  const brand = domain.split('.')[0];
+  const queries = [
+    `"${domain}" site:news`,
+    `"${brand}" funding OR raises OR announces`,
+    `"${brand}" partnership OR launches OR expansion`,
+  ];
+  const trusted = new Set([
+    'techcrunch.com','wsj.com','bloomberg.com','forbes.com','businessinsider.com','reuters.com','theverge.com','nytimes.com','ft.com','wired.com','cnbc.com','cnn.com','bbc.com'
+  ]);
+  const seen = new Set<string>();
+  const collected: any[] = [];
+  for (let i=0;i<queries.length && collected.length < limit*2;i++) {
+    try {
+      await delay(200);
+      const res = await exaSearch(apiKey, {
+        query: queries[i],
+        type: 'neural',
+        numResults: 10,
+        startPublishedDate: getPastDate(30),
+      });
+      for (const r of (res.results||[])) {
+        if (!r.url || seen.has(r.url)) continue;
+        seen.add(r.url);
+        const host = (()=>{ try { return new URL(r.url).hostname.toLowerCase(); } catch { return ''; } })();
+        const credibility = trusted.has(host) ? 2 : (host.endsWith(domain.toLowerCase()) ? 1 : 0);
+        collected.push({
+          title: r.title,
+            url: r.url,
+            domain: host,
+            publishedDate: normalizePublishedDate(r.publishedDate || new Date().toISOString()),
+            credibility
+        });
+      }
+    } catch (e) {
+      console.warn('[fetchCompanyNews] query failed', queries[i], e);
+      continue;
+    }
+  }
+  // Attach score & sort
+  const ranked = collected.map(n => ({ ...n, _metrics: scoreNewsItem(n) }))
+    .sort((a,b)=> (b._metrics.score - a._metrics.score) || (new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()));
+  const picked = ranked.slice(0, limit);
+  // Guarantee at least one by falling back to any recent mention if none credible
+  if (picked.length === 0 && ranked.length) picked.push(ranked[0]);
+  return { results: picked };
+}

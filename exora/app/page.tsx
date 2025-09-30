@@ -436,9 +436,9 @@ export default function ExoraPage() {
       <div className="relative z-10">
         <Navbar />
 
-        <main className="p-6">
+  <main className="p-6 pt-10 md:pt-12">
           {showInlineHero && (
-            <div id="hero-banner" className="mb-12 scroll-mt-6">
+            <div id="hero-banner" className="mb-12 scroll-mt-24">
               <div className="text-center max-w-4xl mx-auto">
                 <h1 className="text-3xl md:text-5xl font-bold text-slate-50 tracking-tight mb-2">
                   Decode <span className="text-slate-300">Any Competitor</span>.
@@ -485,7 +485,7 @@ export default function ExoraPage() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="container mx-auto px-4">
+                <div className="container mx-auto px-4 pt-4">
                   <div className="w-full max-w-3xl mx-auto mb-8">
                     <AIInputWithSearch
                       placeholder="Search for another company..."
@@ -555,7 +555,7 @@ export default function ExoraPage() {
                   )}
 
                   {activeView === "overview" && analysisData && (
-                    <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-8 max-w-[1600px] mx-auto">
+                    <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_2.7fr] gap-8 max-w-[1600px] mx-auto">
                       <div className="xl:sticky top-28 h-fit">
                         <CompanyOverviewCard
                           profile={analysisData.companyProfile}
@@ -565,9 +565,13 @@ export default function ExoraPage() {
                           }
                         />
                       </div>
-                      <div className="flex flex-col gap-8">
+                      <div className="flex flex-col gap-4 h-full">
+                        <div className="flex-[1_1_120px]">
                         <CompanyNewsGrid items={analysisData.newsFeed} />
+                        </div>
+                        <div className ="flex-[6_1_0px] min-h-0">
                         <CompetitorNews competitors={analysisData.benchmarkMatrix.slice(1)} />
+                        </div>
                       </div>
                     </div>
                   )}

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { sharedLimiter } from '@/lib/limiter'
 import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-service'
-import { fetchExaData } from '@/lib/exa-service'
+import { fetchExaData, fetchCompanyNews, scoreNewsItem } from '@/lib/exa-service'
+import { getOrGenerateProfileSnapshot } from '@/lib/profile-snapshot'
 import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData, generateEnhancedSentimentAnalysis } from '@/lib/analysis-service'
 import { normalizePublishedDate } from '@/lib/utils'
 
@@ -50,6 +51,7 @@ export async function GET(req: Request) {
   const raw = searchParams.get('domain')
   if (!raw) return NextResponse.json({ error: 'Missing domain' }, { status: 400 })
   const domain = cleanDomain(raw)
+  const refreshProfile = searchParams.get('refreshProfile') === 'true'
 
   const exaKey = process.env.EXA_API_KEY
   const groqKey = process.env.GROQ_API_KEY
@@ -69,35 +71,53 @@ export async function GET(req: Request) {
 
       try {
         // Stage 1: Overview (fast LLM TL;DR)
-        const overview = await safeGenerateText(
-          `One-sentence factual description of ${domain}.`, llmProviders
-        )
+        const snapshotProfile = await getOrGenerateProfileSnapshot(domain, llmProviders, refreshProfile)
+        const overview = snapshotProfile.brief || snapshotProfile.description?.split('.').slice(0,1).join('.') || `Company at ${domain}`
         send('overview', { domain, overview })
+        send('profile', { profile: snapshotProfile })
 
         // Stage 2: Founders + Socials (parallel, but limited)
-        const foundersPrompt = `Founders of ${domain}. Return ONLY JSON array with name, linkedin, twitter.`
+  const foundersPrompt = `For the company operating at ${domain}, return ONLY JSON array of people objects with keys: name, roleGuess (Founder/Co-Founder/CEO/CTO/Other), linkedin (url or null), wikipedia (url or null), confidence (0-1). Include current CEO & CTO even if not founders. Use public knowledge up to 2024.`
         const profilePrompt = `Profile for ${domain}. Return ONLY JSON with name, description, ipoStatus, socials{linkedin,twitter,facebook}`
   const foundersPromise = safeGenerateJson(foundersPrompt, llmProviders).catch(() => [])
   const profilePromise = safeGenerateJson(profilePrompt, llmProviders).catch(() => ({ name: domain.split('.')[0], description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} }))
 
-        const [founders, profile] = await Promise.all([foundersPromise, profilePromise])
-        send('founders', { founders })
+  const [rawLeaders, profile] = await Promise.all([foundersPromise, profilePromise])
+  // Normalize & split founders vs current execs
+  const leaders = Array.isArray(rawLeaders) ? rawLeaders : []
+  const founders = leaders.filter((p: any) => /founder/i.test(p.roleGuess || ''))
+  const executives = leaders.filter((p: any) => /(ceo|cto)/i.test(p.roleGuess || ''))
+  send('founders', { founders })
+  send('leadership', { executives, founders })
         send('socials', { socials: profile.socials || {} })
+        // merge socials into existing snapshot if emitted
+        snapshotProfile.socials = profile.socials || {}
+        send('profile', { profile: snapshotProfile })
 
         // Stage 3: Competitor discovery (LLM) + mentions for main company
   const competitors = await discoverCompetitors(domain, llmProviders)
         send('competitors', { competitors })
 
         const mainMentions = await fetchExaData(domain, 'mentions', exaKey, { numResults: 15 })
-        // prefer exact-domain links first
-        const getHost = (u: string): string | null => { try { return new URL(u).hostname.toLowerCase() } catch { return null } }
-        const target = domain.toLowerCase()
-        const exact = (mainMentions.results || []).filter((m: any) => { const h = getHost(m.url); return h && (h === target || h.endsWith(`.${target}`)) })
-        const rest = (mainMentions.results || []).filter((m: any) => !exact.includes(m))
-        const ordered = [...exact, ...rest]
-        const mainTopNews = ordered.slice(0, 3).map((m: any) => ({
-          headline: m.title, url: m.url, source: m.domain, publishedDate: normalizePublishedDate(m.publishedDate || new Date().toISOString())
+        // Focused company news (1–3 credible items)
+        const focusedNews = await fetchCompanyNews(domain, exaKey, { limit: 3 }).catch(()=>({ results: [] }))
+        let mainTopNews = (focusedNews.results || []).map((m: any) => ({
+          headline: m.title,
+          url: m.url,
+          source: m.domain,
+          publishedDate: normalizePublishedDate(m.publishedDate)
         }))
+        // LLM validation filter: ensure each headline truly refers to target company (avoid homonyms)
+        if (mainTopNews.length) {
+          try {
+            const validationPrompt = `Given the company domain ${domain} and these news items as JSON array, return ONLY a JSON array of the indices that are truly about this company (not other similarly named entities). Headlines JSON: ${JSON.stringify(mainTopNews.map(n => n.headline))}`
+            const idxJson = await safeGenerateJson<number[]>(validationPrompt, llmProviders).catch(()=>[]) as number[]
+            if (Array.isArray(idxJson) && idxJson.length) {
+              const allowed = new Set(idxJson.filter(n=> Number.isFinite(n)))
+              mainTopNews = mainTopNews.filter((_,i)=> allowed.has(i))
+            }
+          } catch {}
+        }
         send('company-news', { news: mainTopNews })
 
         // Stage 4: Competitor news (batched fetches, capped concurrency via limiter)
@@ -127,15 +147,15 @@ export async function GET(req: Request) {
           grouped[item.domain].push(item)
         }
         const refined: any[] = []
-        Object.entries(grouped).forEach(([domain, items]) => {
-          const ranked = items.map(n => ({
-            ...n,
-            credibility: trustedSources.has((n.source || '').toLowerCase()) ? 1 : 0,
-            freshness: Date.now() - new Date(n.publishedDate).getTime()
-          })).sort((a,b)=> (b.credibility - a.credibility) || (a.freshness - b.freshness))
+        Object.entries(grouped).forEach(([cDomain, items]) => {
+          const ranked = items.map(n => {
+            const credibility = trustedSources.has((n.source || '').toLowerCase()) ? 2 : 0
+            const metrics = scoreNewsItem({ title: n.headline, url: n.url, publishedDate: n.publishedDate, credibility, domain: n.source })
+            return { ...n, credibility, _metrics: metrics }
+          }).sort((a,b)=> (b._metrics.score - a._metrics.score) || (new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()))
           const slice = ranked.slice(0,4)
           const finalSlice = slice.length < 2 ? ranked.slice(0,2) : slice
-          refined.push(...finalSlice.map(({credibility,freshness,...rest})=>rest))
+          refined.push(...finalSlice.map(({credibility,_metrics,...rest})=>rest))
         })
         // Flatten refined (client groups anyway) but cap global to prevent overload
         send('competitor-news', { news: refined.slice(0, 12) })

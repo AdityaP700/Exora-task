@@ -18,7 +18,7 @@ export function CompetitorNews({ competitors }: Props) {
   const hasNews = flatNews.length>0
 
   return (
-    <section aria-labelledby="competitor-news" className="glass rounded-2xl p-5 flex flex-col h-full backdrop-blur-md bg-gradient-to-br from-slate-900/60 to-slate-800/40 border border-white/10 shadow-lg">
+  <section aria-labelledby="competitor-news" className="glass rounded-2xl p-5 flex flex-col h-full backdrop-blur-md bg-gradient-to-br from-slate-900/60 to-slate-800/40 border border-white/10 shadow-lg">
       <header className="mb-4">
         <h2 id="competitor-news" className="text-[11px] font-medium tracking-wider text-slate-400 mb-1">COMPETITOR NEWS</h2>
         <p className="text-xs text-slate-500">Updates from industry peers</p>
@@ -30,7 +30,7 @@ export function CompetitorNews({ competitors }: Props) {
         ))}
       </div>
       <div className="relative flex-1 overflow-hidden">
-        <div className="absolute inset-0 overflow-y-auto pr-1 space-y-3">
+  <div className="absolute inset-0 overflow-y-auto pr-1 space-y-3">
           {!hasNews && (
             <div className="text-center py-10 text-slate-500 text-sm flex flex-col items-center gap-2">
               <Newspaper className="w-8 h-8 text-slate-600" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface NewsThumbnailProps {
   url: string;
@@ -19,48 +19,54 @@ const getFaviconUrl = (url: string) => {
 export function NewsThumbnail({ url, headline }: NewsThumbnailProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const didRequest = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
+    const key = `ogcache:${url}`;
+    // 1. Try sessionStorage cache
+    try {
+      const cached = sessionStorage.getItem(key);
+      if (cached) {
+        const parsed = JSON.parse(cached) as { imageUrl: string | null; ts: number };
+        // 30 min TTL client-side
+        if (Date.now() - parsed.ts < 1000 * 60 * 30) {
+          setImageUrl(parsed.imageUrl ?? getFaviconUrl(url));
+          setLoading(false);
+          didRequest.current = true;
+          return;
+        }
+      }
+    } catch {}
+
     const fetchOgImage = async () => {
+      if (didRequest.current) return; // Prevent duplicate fetch on fast remount
+      didRequest.current = true;
       setLoading(true);
       try {
         const response = await fetch(`/api/og?url=${encodeURIComponent(url)}`);
         if (response.ok) {
           const data = await response.json();
-          if (isMounted && data.imageUrl) {
-            setImageUrl(data.imageUrl);
-          } else if (isMounted) {
-            setImageUrl(getFaviconUrl(url));
-          }
+            const resolved = data.imageUrl || getFaviconUrl(url);
+            if (isMounted) {
+              setImageUrl(resolved);
+            }
+            try { sessionStorage.setItem(key, JSON.stringify({ imageUrl: data.imageUrl, ts: Date.now() })); } catch {}
         } else {
-           if (isMounted) {
-            setImageUrl(getFaviconUrl(url));
-          }
+          if (isMounted) setImageUrl(getFaviconUrl(url));
         }
-      } catch (error) {
-        if (isMounted) {
-          setImageUrl(getFaviconUrl(url));
-        }
+      } catch {
+        if (isMounted) setImageUrl(getFaviconUrl(url));
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchOgImage();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [url]);
 
-  if (loading) {
-    return (
-      <div className="w-full h-full bg-slate-700/40 animate-pulse" />
-    );
-  }
+  if (loading) return <div className="w-full h-full bg-slate-800/40 animate-pulse" />;
 
   if (!imageUrl) {
     return (

@@ -26,26 +26,45 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
   ].filter((link: any) => link && link.href && link.href.includes('http'));
 
   const details = [
-    { icon: Building, value: 'Information Technology' },
-    { icon: Calendar, value: '2010' },
-    { icon: MapPin, value: 'San Francisco, CA' },
-    { icon: Users, value: '1,001-5,000' },
-  ];
+    profile.industry ? { icon: Building, value: profile.industry } : null,
+    profile.foundedYear ? { icon: Calendar, value: profile.foundedYear } : null,
+    profile.headquarters ? { icon: MapPin, value: profile.headquarters } : null,
+    profile.headcountRange ? { icon: Users, value: profile.headcountRange } : null,
+  ].filter(Boolean) as { icon: any; value: string }[]
+
+  const brief = profile.brief || (profile.description || '').split(/(?<=[.!?])\s+/).slice(0,2).join(' ').slice(0,180)
+  const logo = profile.logoUrl || `https://logo.clearbit.com/${displayDomain}`
+
+  // Prioritize CEO / CTO ordering if roles are present
+  const prioritizedFounders = [...founders].sort((a,b)=>{
+    const rank = (f: FounderInfo) => /ceo/i.test(f.role||'') ? 0 : (/cto/i.test(f.role||'') ? 1 : 2)
+    return rank(a) - rank(b)
+  })
 
   const paragraphs = (profile.description || '').split(/\n\n|(?<=[.!?])\s+(?=[A-Z])/).filter(p=>p.trim()).slice(0,3)
 
   return (
     <section className="glass rounded-2xl p-6 backdrop-blur-md bg-gradient-to-br from-slate-900/60 to-slate-800/40 border border-white/10 shadow-xl space-y-8">
-      <header className="flex items-start justify-between">
-        <div>
-          <h2 className="text-[11px] tracking-wider text-slate-400 mb-1">COMPANY OVERVIEW</h2>
-          <h1 className="text-2xl font-semibold text-slate-100 leading-tight">{profile.name}</h1>
-          <a href={`https://${displayDomain}`} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400/80 hover:text-cyan-300 underline-offset-2">
-            {displayDomain}
-          </a>
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4 min-w-0">
+          <div className="w-14 h-14 rounded-xl bg-white/5 ring-1 ring-white/10 overflow-hidden flex items-center justify-center flex-shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logo} alt={profile.name} className="w-full h-full object-contain p-1" onError={(e)=>{ (e.currentTarget as HTMLImageElement).style.display='none' }} />
+            {/* fallback letter overlay if image fails hidden above */}
+            <span className="absolute text-slate-300 text-lg font-semibold select-none">
+              {profile.name?.[0] || 'C'}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-[11px] tracking-wider text-slate-400 mb-1">COMPANY OVERVIEW</h2>
+            <h1 className="text-2xl font-semibold text-slate-100 leading-tight truncate" title={profile.name}>{profile.name}</h1>
+            <a href={`https://${displayDomain}`} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400/80 hover:text-cyan-300 underline-offset-2">
+              {displayDomain}
+            </a>
+          </div>
         </div>
         {typeof sentimentScore === 'number' && (
-          <div className="flex flex-col items-end">
+          <div className="flex flex-col items-end flex-shrink-0">
             <span className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Sentiment</span>
             <div className="px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 text-xs font-medium">
               {Math.round(sentimentScore)}/100
@@ -53,6 +72,11 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
           </div>
         )}
       </header>
+
+      {/* Brief */}
+      {brief && (
+        <p className="text-sm text-slate-300 leading-relaxed">{brief}</p>
+      )}
 
       <div className="space-y-5">
         <div>
@@ -74,23 +98,25 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
           </div>
         </div>
 
-        <div>
-          <h3 className="text-[11px] tracking-wider text-slate-500 mb-2">SNAPSHOT</h3>
-          <ul className="space-y-2 text-sm text-slate-300">
-            {details.map((d,i)=>(
-              <li key={i} className="flex items-center gap-2">
-                <d.icon className="w-4 h-4 text-cyan-300" />
-                <span>{d.value}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        {details.length > 0 && (
+          <div>
+            <h3 className="text-[11px] tracking-wider text-slate-500 mb-2">SNAPSHOT</h3>
+            <ul className="space-y-2 text-sm text-slate-300">
+              {details.map((d,i)=>(
+                <li key={i} className="flex items-center gap-2">
+                  <d.icon className="w-4 h-4 text-cyan-300" />
+                  <span>{d.value}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div>
           <h3 className="text-[11px] tracking-wider text-slate-500 mb-2">HUMANS</h3>
-          {founders && founders.length > 0 ? (
+          {prioritizedFounders && prioritizedFounders.length > 0 ? (
             <div className="grid grid-cols-1 gap-3">
-              {founders.map((f,i)=>{
+              {prioritizedFounders.map((f,i)=>{
                 const social = f.linkedin || f.twitter
                 const Icon = f.linkedin ? Linkedin : (f.twitter ? Twitter : null)
                 return (
@@ -99,7 +125,10 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500/30 to-blue-500/30 flex items-center justify-center text-[11px] text-cyan-200 font-medium">
                         {f.name.split(/\s+/).slice(0,2).map(n=>n[0]).join('')}
                       </div>
-                      <span className="text-sm text-slate-200 truncate">{f.name}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-200 truncate">{f.name}</p>
+                        {f.role && <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-wide">{f.role}</p>}
+                      </div>
                     </div>
                     {social && Icon && (
                       <a href={social} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-cyan-300 transition-colors ml-3 flex-shrink-0">

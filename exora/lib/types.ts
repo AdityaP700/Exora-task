@@ -12,12 +12,21 @@ export interface CompanyProfile {
     twitter?: string
     facebook?: string
   }
+  // Snapshot (optional, progressively enriched)
+  industry?: string
+  foundedYear?: string
+  headquarters?: string
+  headcountRange?: string
+  logoUrl?: string
+  brief?: string // 1–2 line concise summary
+  lastUpdated?: string // ISO timestamp for snapshot freshness
 }
 
 export interface FounderInfo {
   name: string
   linkedin?: string
   twitter?: string
+  role?: string // CEO, CTO, etc.
 }
 
 export interface NewsItem {
