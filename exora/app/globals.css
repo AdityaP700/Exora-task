@@ -191,4 +191,36 @@
   .gradient-negative {
     background: linear-gradient(180deg, var(--exora-red) 0%, transparent 100%);
   }
+
+  /* Glassmorphism + sketch + glow utilities */
+  .glass {
+    background: rgba(15,23,42,0.55);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    border: 1.5px solid rgba(245,158,11,0.35);
+  }
+  .sketch-border {
+    position: relative;
+    border: 2px solid #F59E0B;
+    border-radius: 14px;
+    box-shadow: 0 0 0 1px rgba(245,158,11,0.25), 0 2px 8px -2px rgba(0,0,0,0.5), 0 0 0 4px rgba(245,158,11,0.05);
+  }
+  .sketch-border:before, .sketch-border:after {
+    content:"";
+    pointer-events:none;
+    position:absolute;
+    inset:0;
+    border:2px solid rgba(245,158,11,0.2);
+    border-radius:14px;
+    transform:translate(3px,3px);
+  }
+  .sketch-border:after { transform:translate(-3px,-3px); }
+  .hover-glow { transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease; }
+  .hover-glow:hover { box-shadow:0 0 18px -2px rgba(245,158,11,0.45),0 0 0 1px rgba(245,158,11,0.5); transform:translateY(-2px); }
+
+  .scrollbar-amber { scrollbar-color: #F59E0B22 transparent; }
+  .scrollbar-amber::-webkit-scrollbar { width:8px; }
+  .scrollbar-amber::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-amber::-webkit-scrollbar-thumb { background:#F59E0B33; border-radius:4px; }
+  .scrollbar-amber::-webkit-scrollbar-thumb:hover { background:#F59E0B66; }
 }

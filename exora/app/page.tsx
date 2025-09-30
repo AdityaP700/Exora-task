@@ -9,7 +9,7 @@ import { Navbar } from "@/components/layouts/navbar";
 import { AnalysisView } from "@/components/analysis-view";
 import { SummaryView } from "@/components/summary-view";
 import { CompanyOverviewCard } from "@/components/company-overview-card";
-import { NewsFeed } from "@/components/news-feed";
+import { CompanyNewsGrid } from "@/components/company-news-grid";
 import { CompetitorNews } from "@/components/competitor-news";
 import { AIInputWithSearch } from "@/components/ui/ai-input-with-search";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -445,22 +445,17 @@ export default function ExoraPage() {
                 )}
 
                 {activeView === "overview" && analysisData && (
-                  <div className="grid grid-cols-1 lg:grid-cols-[35%_65%] gap-8 max-w-[1400px] mx-auto">
-                    <div className="lg:sticky top-24 h-fit">
+                  <div className="grid grid-cols-1 xl:grid-cols-[33%_67%] gap-8 max-w-[1500px] mx-auto">
+                    <div className="xl:sticky top-24 h-fit">
                       <CompanyOverviewCard
                         profile={analysisData.companyProfile}
                         founders={analysisData.founderInfo}
                         sentimentScore={analysisData.benchmarkMatrix?.[0]?.sentimentScore}
                       />
                     </div>
-                    <div className="space-y-6">
-                      <NewsFeed
-                        title="Latest Company News"
-                        items={analysisData.newsFeed}
-                      />
-                      <CompetitorNews
-                        competitors={competitorRowsForOverview}
-                      />
+                    <div className="flex flex-col gap-8">
+                      <CompanyNewsGrid items={analysisData.newsFeed} />
+                      <CompetitorNews competitors={analysisData.benchmarkMatrix.slice(1)} />
                     </div>
                   </div>
                 )}
