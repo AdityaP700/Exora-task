@@ -29,7 +29,8 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
     profile.industry ? { icon: Building, value: profile.industry } : null,
     profile.foundedYear ? { icon: Calendar, value: profile.foundedYear } : null,
     profile.headquarters ? { icon: MapPin, value: profile.headquarters } : null,
-    profile.headcountRange ? { icon: Users, value: profile.headcountRange } : null,
+  profile.headcountRange ? { icon: Users, value: profile.headcountRange } : null,
+  !profile.headcountRange && profile.employeeCountApprox ? { icon: Users, value: Intl.NumberFormat('en-US').format(profile.employeeCountApprox) + ' employees' } : null,
   ].filter(Boolean) as { icon: any; value: string }[]
 
   const brief = profile.brief || (profile.description || '').split(/(?<=[.!?])\s+/).slice(0,2).join(' ').slice(0,180)
@@ -62,15 +63,33 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
               {displayDomain}
             </a>
           </div>
+        {profile.profileDataQuality && (
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">Data Quality</span>
+            <span
+              className={
+                "px-2 py-0.5 rounded-full text-[11px] font-medium border " +
+                (profile.profileDataQuality === 'high'
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-400/30'
+                  : profile.profileDataQuality === 'medium'
+                  ? 'bg-amber-500/10 text-amber-300 border-amber-400/30'
+                  : 'bg-slate-600/20 text-slate-300 border-slate-500/30')
+              }
+              title="Heuristic completeness of core company fields"
+            >
+              {profile.profileDataQuality}
+            </span>
+          </div>
+        )}
         </div>
-        {typeof sentimentScore === 'number' && (
+        {/* {typeof sentimentScore === 'number' && (
           <div className="flex flex-col items-end flex-shrink-0">
             <span className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Sentiment</span>
             <div className="px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 text-xs font-medium">
               {Math.round(sentimentScore)}/100
             </div>
           </div>
-        )}
+        )} */}
       </header>
 
       {/* Brief */}
@@ -80,7 +99,6 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
 
       <div className="space-y-5">
         <div>
-          <h3 className="text-[11px] tracking-wider text-slate-500 mb-2 flex items-center gap-1"><Shield className="w-3 h-3" />TRUST ANCHORS</h3>
           <div className="flex flex-wrap gap-2">
             {socialLinks.map((link, i) => (
               <a key={i} href={link!.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs transition-colors border border-white/10">

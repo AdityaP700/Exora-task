@@ -30,7 +30,6 @@ import { PrimarySentimentCard } from "@/components/primary-sentiment-card";
 import { CompetitorSentimentCard } from "@/components/competitor-sentiment-card";
 import { DetailedSentimentAnalysis } from "@/components/detailed-sentiment-analysis";
 import { CompetitorSentimentComparison } from "@/components/competitor-sentiment-comparison";
-import { MarketSentimentOverview } from "@/components/market-sentiment-overview";
 import { FeatureCards } from "@/components/feature-cards";
 
 // A skeleton loader that matches the final results layout
@@ -190,6 +189,60 @@ export default function ExoraPage() {
                 socials: {},
               } as CompanyProfile)
           );
+        } catch {}
+      });
+
+      // NEW: canonical enrichment (arrives before profile sometimes)
+      es.addEventListener("canonical", (ev: MessageEvent) => {
+        try {
+          const { canonical } = JSON.parse(ev.data);
+          if (!canonical) return;
+          setProfile((prev) => {
+            if (!prev) return prev; // wait for minimal bootstrap from overview
+            const baseStem = cleanedDomain.split('.')[0].toLowerCase();
+            const currentName = prev.name || baseStem;
+            const incoming = canonical.canonicalName || currentName;
+            const looksGeneric = !currentName || currentName.toLowerCase() === baseStem || currentName.length < 4;
+            return {
+              ...prev,
+              name: looksGeneric ? incoming : prev.name,
+              canonicalName: canonical.canonicalName,
+              aliases: canonical.aliases,
+              industry: prev.industry || canonical.industryHint || prev.industry,
+            };
+          });
+        } catch {}
+      });
+
+      // NEW: structured profile snapshot (server enriched snapshotProfile)
+      es.addEventListener("profile", (ev: MessageEvent) => {
+        try {
+          const { profile: incoming } = JSON.parse(ev.data);
+          if (!incoming) return;
+          setProfile((prev) => {
+            if (!prev) return incoming; // first rich snapshot
+            // Merge heuristics: prefer longer description & populated fields
+            const merged: CompanyProfile = { ...prev } as CompanyProfile;
+            const descBetter = (incoming.description || '').length > (prev.description || '').length + 25;
+            if (descBetter) merged.description = incoming.description;
+            if (!prev.brief && incoming.brief) merged.brief = incoming.brief;
+            const copyIf = <K extends keyof CompanyProfile>(k: K) => {
+              if (incoming[k] && !prev[k]) (merged as any)[k] = incoming[k];
+            };
+            copyIf('industry');
+            copyIf('foundedYear');
+            copyIf('headquarters');
+            copyIf('headcountRange');
+            copyIf('employeeCountApprox');
+            copyIf('ipoStatus');
+            if (incoming.socials && Object.keys(incoming.socials).length) {
+              merged.socials = { ...(prev.socials||{}), ...incoming.socials };
+            }
+            if (incoming.profileDataQuality) merged.profileDataQuality = incoming.profileDataQuality;
+            if (incoming.canonicalName) merged.canonicalName = incoming.canonicalName;
+            if (incoming.aliases?.length) merged.aliases = incoming.aliases;
+            return merged;
+          });
         } catch {}
       });
 
@@ -406,6 +459,7 @@ export default function ExoraPage() {
       benchmarkMatrix,
       newsFeed: companyNewsItems,
       aiSummary,
+      className: 'briefing'
     };
   }, [
     profile,
@@ -565,12 +619,15 @@ export default function ExoraPage() {
                           }
                         />
                       </div>
-                      <div className="flex flex-col gap-4 h-full">
-                        <div className="flex-[1_1_120px]">
+                      <div className="flex flex-col gap-8">
+                        <div>
                         <CompanyNewsGrid items={analysisData.newsFeed} />
                         </div>
-                        <div className ="flex-[6_1_0px] min-h-0">
-                        <CompetitorNews competitors={analysisData.benchmarkMatrix.slice(1)} />
+                        <div>
+                        <CompetitorNews 
+                          competitors={(analysisData.benchmarkMatrix.slice(1).length ? analysisData.benchmarkMatrix.slice(1) : competitorRowsForOverview) as any}
+                          isLoading={isStreaming && !analysisData.benchmarkMatrix.slice(1).some(r=> (r.news||[]).length)}
+                        />
                         </div>
                       </div>
                     </div>

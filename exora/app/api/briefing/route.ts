@@ -53,6 +53,36 @@ async function discoverCompetitors(domain: string, providers: ProviderConfig[]):
   return getIndustryDefaults(domain);
 }
 
+// --- Profile Refinement Helper ---
+async function refineIncompleteProfile(base: CompanyProfile, domain: string, providers: ProviderConfig[]): Promise<Partial<CompanyProfile>> {
+  const missing: string[] = []
+  if (!base.industry) missing.push('industry')
+  if (!base.foundedYear) missing.push('foundedYear')
+  if (!base.headquarters) missing.push('headquarters')
+  if (!base.headcountRange && !base.employeeCountApprox) missing.push('headcountRange','employeeCount')
+  if (!base.brief) missing.push('brief')
+  if (!base.description || base.description.length < 40) missing.push('description')
+  if (missing.length === 0) return {}
+
+  const refinePrompt = `We have a partial company profile for domain "${domain}".
+Existing JSON:
+${JSON.stringify(base, null, 2)}
+
+Provide ONLY a JSON object containing ONLY the missing or weak fields from this list: ${missing.join(', ')}.
+Rules:
+- Do NOT include fields that are already sufficiently populated.
+- If still unknown, omit the field entirely (do not output null).
+- description <=320 chars; brief <=160 chars; headcountRange must be one of: "1-10","11-50","51-200","201-500","501-1000","1000-5000","5000+".
+- Avoid marketing fluff; keep factual.
+Return JSON now:`
+  try {
+    const patch = await safeGenerateJson<any>(refinePrompt, providers)
+    return patch || {}
+  } catch {
+    return {}
+  }
+}
+
 function validateAndCleanCompetitors(competitors: string[], primaryDomain: string): string[] {
   return competitors
     .map(d => d.replace(/https?:\/\//, '').replace(/^www\./, '').replace(/["']/g, '').trim())
@@ -219,12 +249,70 @@ export async function GET(request: Request) {
     const allDomains = [domain, ...competitors];
 
     // --- Step 2: Additional LLM metadata (Company Profile, Founders) ---
-    const profilePrompt = `Provide a concise profile for the company at "${domain}".
-Return ONLY a valid JSON object with keys: name, description, ipoStatus ("Public"|"Private"|"Unknown"), socials (object with linkedin, twitter, facebook URLs).`;
+    const profilePrompt = `You are enriching a structured company profile for the domain "${domain}".
+Return ONLY valid JSON with the following keys (omit or null if genuinely unknown – do NOT hallucinate specifics):
+{
+  "name": string,                // Official or widely used brand name
+  "description": string,         // <=320 chars factual what the company does (no marketing fluff)
+  "brief": string,               // <=160 chars crisp capsule summary
+  "ipoStatus": "Public"|"Private"|"Unknown",
+  "industry": string|null,       // General industry vertical (e.g. Fintech, Cloud Infrastructure)
+  "foundedYear": number|null,
+  "headquarters": string|null,   // City, Country or City, State (US)
+  "headcountRange": string|null, // e.g. "1-10", "11-50", "51-200", "201-500", "501-1000", "1000-5000", "5000+"
+  "employeeCount": number|null,  // Approx current total employees worldwide (integer)
+  "socials": { "linkedin"?: string, "twitter"?: string, "facebook"?: string }
+}
+Rules:
+- Prefer concise, factual wording.
+- If the domain looks like an early-stage startup and no data is known, return minimal safe fields.
+- Never invent precise employee counts – use null if not inferable.
+- If name would just repeat domain verbatim (e.g. "google.com"), strip the TLD -> "Google".`;
     const foundersPrompt = `Who are the key founders of the company at "${domain}"? Return ONLY a valid JSON array of objects, each with fields: name, linkedin, twitter.`;
 
     const companyProfilePromise = safeGenerateJson<CompanyProfile>(profilePrompt, llmProviders)
-      .catch(() => ({ name: domain.split('.')[0], domain, description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} } as CompanyProfile));
+      .catch(() => ({ name: domain.split('.')[0], domain, description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} } as CompanyProfile))
+      .then(async (rawProfile) => {
+        // Normalize weak name
+        const bare = domain.split('.')[0]
+        if (rawProfile.name && /\.[a-z]{2,}$/.test(rawProfile.name)) {
+          rawProfile.name = rawProfile.name.replace(/\.[a-z]{2,}$/,'')
+        }
+        if (!rawProfile.name || rawProfile.name.toLowerCase() === domain.toLowerCase()) rawProfile.name = bare.charAt(0).toUpperCase() + bare.slice(1)
+
+        // Run refinement pass for missing fields
+        const refinement = await refineIncompleteProfile(rawProfile as CompanyProfile, domain, llmProviders)
+        const merged: CompanyProfile = { ...rawProfile, ...refinement }
+
+        // Heuristic employeeCountApprox from headcountRange
+        if (!merged.employeeCountApprox && merged.headcountRange) {
+          const range = merged.headcountRange
+          const midpoint = (r: string): number | undefined => {
+            if (r === '5000+') return 7500
+            const m = r.match(/(\d+)-(\d+)/)
+            if (m) { return Math.round((parseInt(m[1]) + parseInt(m[2]))/2) }
+            return undefined
+          }
+            ;(merged as any).employeeCountApprox = merged.employeeCountApprox || midpoint(range)
+        }
+
+        // Weak description repair
+        if (!merged.description || merged.description.length < 40) {
+          merged.description = merged.brief || `Company operating at ${domain}`
+        }
+        if (!merged.brief) {
+          merged.brief = (merged.description.length <= 160) ? merged.description : merged.description.slice(0,157) + '…'
+        }
+
+        // Data quality scoring
+        const filledCore = [merged.industry, merged.foundedYear, merged.headquarters, merged.headcountRange, merged.employeeCountApprox].filter(Boolean).length
+        let quality: 'high' | 'medium' | 'low' = 'low'
+        if (filledCore >= 4) quality = 'high'
+        else if (filledCore >= 2) quality = 'medium'
+        merged.profileDataQuality = quality
+
+        return merged
+      });
     const founderInfoPromise = safeGenerateJson<FounderInfo[]>(foundersPrompt, llmProviders)
       .catch(() => []);
 
@@ -470,6 +558,7 @@ OUTPUT: 3 bullet points, each starting with "• ";`
         summary: summaryPoints,
         groqTlDr,
       },
+      className: 'briefing'
     };
 
     return NextResponse.json(response);

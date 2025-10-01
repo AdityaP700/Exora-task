@@ -17,10 +17,11 @@ export async function getOrGenerateProfileSnapshot(domain: string, providers: Pr
   }
 
   const overview = await safeGenerateText(`One-sentence factual description of the company operating at ${domain}.`, providers).catch(()=>`Company at ${domain}`)
-  const snapshotPrompt = `Return ONLY valid JSON with keys: name, industry, foundedYear, headquarters, headcountRange, brief(<=160 chars), description(<=320 chars), ipoStatus(Public|Private|Unknown). Domain: ${domain}. If unknown, omit field.`
+  const snapshotPrompt = `Return ONLY valid JSON with keys: name, industry, foundedYear, headquarters, headcountRange, employeeCount (integer, approximate current total employees worldwide if publicly known), brief(<=160 chars), description(<=320 chars), ipoStatus(Public|Private|Unknown). Domain: ${domain}. If unknown, omit field or use null. Do NOT fabricate precision.`
   let raw: any = {}
   try { raw = await safeGenerateJson<any>(snapshotPrompt, providers) } catch {}
 
+  // Base profile; canonical enrichment (name/aliases) applied later in route if needed
   const profile: CompanyProfile = {
     name: raw?.name || domain.split('.')[0],
     domain,
@@ -31,6 +32,7 @@ export async function getOrGenerateProfileSnapshot(domain: string, providers: Pr
     foundedYear: raw?.foundedYear?.toString(),
     headquarters: raw?.headquarters,
     headcountRange: raw?.headcountRange,
+    employeeCountApprox: (typeof raw?.employeeCount === 'number' && raw.employeeCount > 0) ? Math.round(raw.employeeCount) : undefined,
     brief: raw?.brief || overview,
     logoUrl: `https://logo.clearbit.com/${domain}`,
     lastUpdated: new Date().toISOString()

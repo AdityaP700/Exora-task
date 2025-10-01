@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { sharedLimiter } from '@/lib/limiter'
 import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-service'
-import { fetchExaData, fetchCompanyNews, scoreNewsItem } from '@/lib/exa-service'
+import { fetchExaData, scoreNewsItem, exaAdHocSearch } from '@/lib/exa-service'
+import { getCanonicalInfo } from '@/lib/canonical'
 import { getOrGenerateProfileSnapshot } from '@/lib/profile-snapshot'
 import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData, generateEnhancedSentimentAnalysis } from '@/lib/analysis-service'
 import { normalizePublishedDate } from '@/lib/utils'
@@ -35,13 +36,31 @@ async function discoverCompetitors(domain: string, providers: ProviderConfig[]):
 
 async function getSentimentScore(headlines: string[], providers: ProviderConfig[]): Promise<number> {
   if (!headlines?.length) return 50
+
+  // 1) Try LLM fast path
   const prompt = `Score the sentiment (0-100) of these headlines. Return ONLY the number.\n\n${headlines.map(h => `- ${h}`).join('\n')}`
   try {
     const txt = await safeGenerateText(prompt, providers)
     const num = parseInt(txt.replace(/[^0-9]/g, ''))
     if (Number.isFinite(num) && num >= 0 && num <= 100) return num
   } catch {}
-  return 50
+
+  // 2) Deterministic lexical fallback (ensures non-flat variation without LLM)
+  const POS = ['growth','record','surge','expand','expands','launch','launches','innovative','partnership','raises','funding','profit','profitable','beat','beats','up','acquire','acquires','strong','improve','improves']
+  const NEG = ['layoff','layoffs','cut','cuts','lawsuit','decline','drop','plunge','breach','shutdown','loss','negative','down','fraud','issue','issues','risk','risks','weak','slow','slows']
+  let pos = 0, neg = 0
+  for (const h of headlines) {
+    const lower = (h||'').toLowerCase()
+    POS.forEach(w=> { if (lower.includes(w)) pos++ })
+    NEG.forEach(w=> { if (lower.includes(w)) neg++ })
+  }
+  const total = pos + neg
+  if (total === 0) return 50 // truly neutral fallback
+  // Center at 50, scale polarity to ±35, add mild volume boost capped
+  const polarity = (pos - neg) / total // -1..1
+  const volumeBoost = Math.min(10, Math.log2(headlines.length + 1) * 3) // 0..~10
+  const score = Math.round(50 + polarity * 35 + volumeBoost * (polarity >= 0 ? 0.4 : -0.4))
+  return Math.max(0, Math.min(100, score))
 }
 
 export const runtime = 'nodejs'
@@ -51,6 +70,8 @@ export async function GET(req: Request) {
   const raw = searchParams.get('domain')
   if (!raw) return NextResponse.json({ error: 'Missing domain' }, { status: 400 })
   const domain = cleanDomain(raw)
+  // Dynamic canonical inference structure
+  let canonical: { canonicalName: string; aliases: string[]; industryHint?: string; brandTokens?: string[] } | null = null
   const refreshProfile = searchParams.get('refreshProfile') === 'true'
 
   const exaKey = process.env.EXA_API_KEY
@@ -70,51 +91,131 @@ export async function GET(req: Request) {
       const send = (event: string, data: unknown) => controller.enqueue(new TextEncoder().encode(sseChunk(event, data)))
 
       try {
+        // Stage 0: Canonical inference (disambiguation & alias surface)
+        try {
+          canonical = await getCanonicalInfo(domain, llmProviders)
+          send('canonical', { canonical })
+        } catch {}
+
         // Stage 1: Overview (fast LLM TL;DR)
         const snapshotProfile = await getOrGenerateProfileSnapshot(domain, llmProviders, refreshProfile)
+        // Attach canonical enrichment: only override if snapshot name looks like raw domain stem or is very short (<4 chars)
+        if (canonical) {
+          const baseStem = domain.split('.')[0].toLowerCase()
+          const currentName = (snapshotProfile.name || '').trim()
+          const looksGeneric = !currentName || currentName.toLowerCase() === baseStem || currentName.length < 4
+          if (looksGeneric && canonical.canonicalName) {
+            snapshotProfile.name = canonical.canonicalName
+          }
+          snapshotProfile.canonicalName = canonical.canonicalName
+          snapshotProfile.aliases = canonical.aliases
+          if (!snapshotProfile.industry && canonical.industryHint) {
+            snapshotProfile.industry = canonical.industryHint
+          }
+        }
         const overview = snapshotProfile.brief || snapshotProfile.description?.split('.').slice(0,1).join('.') || `Company at ${domain}`
         send('overview', { domain, overview })
         send('profile', { profile: snapshotProfile })
 
         // Stage 2: Founders + Socials (parallel, but limited)
-  const foundersPrompt = `For the company operating at ${domain}, return ONLY JSON array of people objects with keys: name, roleGuess (Founder/Co-Founder/CEO/CTO/Other), linkedin (url or null), wikipedia (url or null), confidence (0-1). Include current CEO & CTO even if not founders. Use public knowledge up to 2024.`
-        const profilePrompt = `Profile for ${domain}. Return ONLY JSON with name, description, ipoStatus, socials{linkedin,twitter,facebook}`
+        const foundersPrompt = `For the company operating at ${domain}${canonical ? ` (canonical name: ${canonical.canonicalName}; aliases: ${canonical.aliases.join(', ')})` : ''}, return ONLY JSON array of people objects with keys: name, roleGuess (Founder/Co-Founder/CEO/CTO/Director/Other), linkedin (url or null), wikipedia (url or null), confidence (0-1). Ensure the current CEO is included; if no CTO publicly known include a senior technology leader (e.g., CTO-equivalent) or a Director if relevant. Use public knowledge up to 2024.`
+        const profilePrompt = `Profile for ${domain}${canonical ? ` (canonical name: ${canonical.canonicalName})` : ''}. Return ONLY JSON with name, description, ipoStatus, socials{linkedin,twitter,facebook}`
   const foundersPromise = safeGenerateJson(foundersPrompt, llmProviders).catch(() => [])
   const profilePromise = safeGenerateJson(profilePrompt, llmProviders).catch(() => ({ name: domain.split('.')[0], description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} }))
 
   const [rawLeaders, profile] = await Promise.all([foundersPromise, profilePromise])
   // Normalize & split founders vs current execs
-  const leaders = Array.isArray(rawLeaders) ? rawLeaders : []
+  let leaders = Array.isArray(rawLeaders) ? rawLeaders : []
+  // guarantee CEO presence with fallback heuristic if missing
+  const hasCEO = leaders.some((p: any) => /ceo/i.test(p.roleGuess || ''))
+  if (!hasCEO && canonical) {
+    // attempt a lightweight CEO fetch
+    try {
+      const ceoText = await safeGenerateText(`Who is the current CEO of ${canonical.canonicalName}? Return ONLY the name.`, llmProviders)
+      const name = ceoText.split(/\n|,|-/)[0].trim().slice(0,120)
+      if (name && !leaders.some((l: any)=> l.name?.toLowerCase() === name.toLowerCase())) {
+        leaders.push({ name, roleGuess: 'CEO', linkedin: null, wikipedia: null, confidence: 0.55 })
+      }
+    } catch {}
+  }
   const founders = leaders.filter((p: any) => /founder/i.test(p.roleGuess || ''))
-  const executives = leaders.filter((p: any) => /(ceo|cto)/i.test(p.roleGuess || ''))
+  const executives = leaders.filter((p: any) => /(ceo|cto|director)/i.test(p.roleGuess || ''))
   send('founders', { founders })
   send('leadership', { executives, founders })
         send('socials', { socials: profile.socials || {} })
         // merge socials into existing snapshot if emitted
         snapshotProfile.socials = profile.socials || {}
-        send('profile', { profile: snapshotProfile })
-
+        let mainMentions = await fetchExaData(domain, 'mentions', exaKey, { numResults: 25 })
         // Stage 3: Competitor discovery (LLM) + mentions for main company
   const competitors = await discoverCompetitors(domain, llmProviders)
         send('competitors', { competitors })
-
-        const mainMentions = await fetchExaData(domain, 'mentions', exaKey, { numResults: 15 })
-        // Focused company news (1–3 credible items)
-        const focusedNews = await fetchCompanyNews(domain, exaKey, { limit: 3 }).catch(()=>({ results: [] }))
-        let mainTopNews = (focusedNews.results || []).map((m: any) => ({
+        // Re-score + disambiguation filter: keep only items referencing aliases unless from trusted source
+        const TRUSTED_SOURCES = ['techcrunch.com','wsj.com','bloomberg.com','forbes.com','businessinsider.com','reuters.com','theverge.com','nytimes.com','ft.com','wired.com','cnbc.com','cnn.com','bbc.com']
+        const MIN_MENTIONS = 8
+        if (canonical && mainMentions?.results?.length) {
+          const original = [...mainMentions.results]
+          const aliasRegex = new RegExp(`\\b(${canonical.aliases.map((a: string)=>a.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')).join('|')})\\b`, 'i')
+          mainMentions.results = mainMentions.results.filter((r: any) => {
+            if (!r.title) return false
+            const host = (()=>{ try { return new URL(r.url).hostname.toLowerCase() } catch { return '' } })()
+            if (TRUSTED_SOURCES.includes(host)) return true
+            return aliasRegex.test(r.title || '')
+          })
+          // If filtering became too aggressive, fall back to original
+          if (mainMentions.results.length < Math.min(3, original.length)) {
+            mainMentions.results = original
+          }
+        }
+        // Query expansion if still low recall
+        if (canonical && (!mainMentions?.results || mainMentions.results.length < MIN_MENTIONS)) {
+          try {
+            const expansionPrompt = `Given canonical company name ${canonical.canonicalName} and aliases ${canonical.aliases.join(', ')}, propose 3 concise alternative news search queries (no quotes) focusing on recent strategic moves, funding, partnerships or expansions. Return ONLY JSON array of strings.`
+            const queries = await safeGenerateJson<string[]>(expansionPrompt, llmProviders).catch(()=>[])
+            const extraResults: any[] = []
+            if (Array.isArray(queries)) {
+              for (const q of queries.slice(0,3)) {
+                try {
+                  const res = await exaAdHocSearch(exaKey, `${q} ${canonical.canonicalName}`, 6)
+                  if (res?.results) extraResults.push(...res.results)
+                } catch {}
+              }
+            }
+            if (extraResults.length) {
+              const seen = new Set((mainMentions.results || []).map((r: any)=> r.url))
+              const merged = [...(mainMentions.results || [])]
+              for (const r of extraResults) {
+                if (!r.url || seen.has(r.url)) continue
+                seen.add(r.url)
+                merged.push(r)
+              }
+              mainMentions.results = merged
+            }
+          } catch {}
+        }
+        // Derive company news similarly to competitor approach (rank & slice)
+        const trustedSources = new Set<string>([
+          'techcrunch.com','wsj.com','bloomberg.com','forbes.com','businessinsider.com','reuters.com','theverge.com','nytimes.com','ft.com','wired.com','cnbc.com','cnn.com','bbc.com'
+        ])
+        interface MainNews { headline: string; url: string; source: string; publishedDate: string; credibility?: number; _metrics?: any }
+        let mainTopNews: MainNews[] = (mainMentions.results || []).map((m: any): MainNews => ({
           headline: m.title,
           url: m.url,
           source: m.domain,
-          publishedDate: normalizePublishedDate(m.publishedDate)
+          publishedDate: normalizePublishedDate(m.publishedDate || new Date().toISOString()),
+          credibility: trustedSources.has((m.domain || '').toLowerCase()) ? 2 : 0
         }))
+          .map((n: MainNews) => ({ ...n, _metrics: scoreNewsItem({ title: n.headline, url: n.url, publishedDate: n.publishedDate, credibility: n.credibility, domain: n.source }) }))
+          .sort((a: MainNews, b: MainNews)=> (b._metrics.score - a._metrics.score) || (new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()))
+          .slice(0,6)
+          .map(({_metrics, credibility, ...rest}: any)=> rest as MainNews)
         // LLM validation filter: ensure each headline truly refers to target company (avoid homonyms)
         if (mainTopNews.length) {
           try {
-            const validationPrompt = `Given the company domain ${domain} and these news items as JSON array, return ONLY a JSON array of the indices that are truly about this company (not other similarly named entities). Headlines JSON: ${JSON.stringify(mainTopNews.map(n => n.headline))}`
+            const validationPrompt = `Given the company domain ${domain} and these news items as JSON array, return ONLY a JSON array of the indices that are truly about this company (not other similarly named entities). Headlines JSON: ${JSON.stringify(mainTopNews.map((n: MainNews) => n.headline))}`
             const idxJson = await safeGenerateJson<number[]>(validationPrompt, llmProviders).catch(()=>[]) as number[]
             if (Array.isArray(idxJson) && idxJson.length) {
               const allowed = new Set(idxJson.filter(n=> Number.isFinite(n)))
-              mainTopNews = mainTopNews.filter((_,i)=> allowed.has(i))
+              mainTopNews = mainTopNews.filter((_,i: number)=> allowed.has(i))
             }
           } catch {}
         }
@@ -126,7 +227,7 @@ export async function GET(req: Request) {
         ))
 
         // Flatten, take latest 4 across all competitors
-        const trustedSources = new Set([
+        const trustedSourcesComp = new Set([
           'techcrunch.com','wsj.com','bloomberg.com','forbes.com','businessinsider.com','reuters.com','theverge.com','nytimes.com','ft.com','wired.com','cnbc.com','cnn.com','bbc.com'
         ])
         const competitorNewsAllRaw = compResults.flatMap((r, idx) => {
@@ -149,7 +250,7 @@ export async function GET(req: Request) {
         const refined: any[] = []
         Object.entries(grouped).forEach(([cDomain, items]) => {
           const ranked = items.map(n => {
-            const credibility = trustedSources.has((n.source || '').toLowerCase()) ? 2 : 0
+            const credibility = trustedSourcesComp.has((n.source || '').toLowerCase()) ? 2 : 0
             const metrics = scoreNewsItem({ title: n.headline, url: n.url, publishedDate: n.publishedDate, credibility, domain: n.source })
             return { ...n, credibility, _metrics: metrics }
           }).sort((a,b)=> (b._metrics.score - a._metrics.score) || (new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()))
@@ -193,10 +294,19 @@ export async function GET(req: Request) {
         })
         send('sentiment', { benchmark })
 
-        // Stage 6: Final summary (exec insights)
-        const superPrompt = `Given this competitive benchmark for ${domain}, write 3 executive insights (each <=40 words).\n\n${JSON.stringify(benchmark, null, 2)}`
-  const summary = await safeGenerateText(superPrompt, llmProviders).catch(() => '• Strong positioning.\n• Positive momentum.\n• Focus on execution.')
-        send('summary', { summary })
+  // Stage 6: Descriptive executive summary
+  const summaryPrompt = `You are generating an executive competitive briefing. Provide:
+1) A one-sentence positioning statement (~22 words) about the company at ${domain} referencing industry & differentiation if evident.
+2) Three strategic bullets (each <=30 words) capturing momentum, risks or opportunities grounded in benchmark sentiment & momentum.
+3) One short competitive lens sentence (<25 words) comparing it to peers.
+Return ONLY plain text lines prefixed with • for bullets, and no extra commentary.
+Context JSON:
+PROFILE: ${JSON.stringify(snapshotProfile)}
+LEADERSHIP: ${JSON.stringify({ executives: executives?.slice?.(0,4), founders: founders?.slice?.(0,4) })}
+BENCHMARK: ${JSON.stringify(benchmark.slice(0,5))}
+NEWS: ${JSON.stringify(mainTopNews.slice(0,4))}`
+  const summary = await safeGenerateText(summaryPrompt, llmProviders).catch(() => '• Positioning: solid presence with emerging competitive signals.\n• Momentum stable vs peers.\n• Opportunity: sharpen differentiation narrative.\n• Peer lens: sentiment parity, differentiation moderate.')
+  send('summary', { summary })
 
         // End
         send('done', { ok: true })

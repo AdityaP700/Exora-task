@@ -17,9 +17,13 @@ export interface CompanyProfile {
   foundedYear?: string
   headquarters?: string
   headcountRange?: string
+  employeeCountApprox?: number // extracted approximate employee strength (integer)
+  canonicalName?: string // inferred canonical legal/brand name (post enrichment)
+  aliases?: string[] // inferred alternative names/brand tokens
   logoUrl?: string
   brief?: string // 1–2 line concise summary
   lastUpdated?: string // ISO timestamp for snapshot freshness
+  profileDataQuality?: 'high' | 'medium' | 'low' // heuristic quality marker added during enrichment
 }
 
 export interface FounderInfo {

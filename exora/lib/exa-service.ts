@@ -305,3 +305,13 @@ export async function fetchCompanyNews(domain: string, apiKey: string, opts?: { 
   if (picked.length === 0 && ranked.length) picked.push(ranked[0]);
   return { results: picked };
 }
+
+// Ad-hoc exposed search (light wrapper) for dynamic query expansion
+export async function exaAdHocSearch(apiKey: string, query: string, numResults = 8, startPublishedDate?: string) {
+  return exaSearch(apiKey, {
+    query,
+    type: 'neural',
+    numResults,
+    startPublishedDate: startPublishedDate || getPastDate(30),
+  })
+}

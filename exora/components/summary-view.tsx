@@ -47,18 +47,18 @@ export function SummaryView({ data, context }: Props) {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-cyan-400" />
+            <div className="w-5 h-5 text-cyan-400" />
             Executive Summary
           </h2>
           <p className="text-sm text-slate-400">AI-generated insights and key takeaways</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={handleShare} className="text-slate-400 hover:text-white hover:bg-white/10">
+          {/* <Button variant="ghost" size="icon" onClick={handleShare} className="text-slate-400 hover:text-white hover:bg-white/10">
             <Share2 className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={handlePrint} className="text-slate-400 hover:text-white hover:bg-white/10">
+          </Button> */}
+          {/* <Button variant="ghost" size="icon" onClick={handlePrint} className="text-slate-400 hover:text-white hover:bg-white/10">
             <FileDown className="w-4 h-4" />
-          </Button>
+          </Button> */}
         </div>
       </div>
 
