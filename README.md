@@ -11,28 +11,28 @@ Mermaid summarizing the top-level component & service relationships:
 
 ```mermaid
 flowchart LR
-	subgraph Client (Next.js App)
-		UI[App Page / React State]\n(SSE Consumer)
-		Modal[API Key Modal]\n(BYOK)
-		Store[Zustand Store]\n(keys + validation)
+	subgraph Client_NextJS_App [Client Next.js App]
+		UI[App Page / React State / SSE Consumer]
+		Modal[API Key Modal - BYOK]
+		Store[Zustand Store - keys + validation]
 		Charts[Sentiment & Benchmarks]
-		OverviewCard[CompanyOverviewCard]\n(DQ + AI coverage)
+		OverviewCard[CompanyOverviewCard - DQ + AI coverage]
 	end
 
-	subgraph Server (API Routes)
-		Stream[/api/briefing/stream\nSSE Orchestrator/]
-		Batch[/api/briefing (legacy batch)/]
+	subgraph Server_API_Routes [API Routes]
+		Stream[/api/briefing/stream - SSE Orchestrator/]
+		Batch[/api/briefing - legacy batch/]
 	end
 
 	subgraph Services
-		Canonical[canonical inference]
-		Profile[profile snapshot + refinement]
-		ExaSvc[exa-service]\n(rate-limited)
-		LLM[llm-service]\n(dynamic providers)
-		Analysis[analysis-service]\n(sentiment,momentum,pulse)
+		Canonical[Canonical Inference]
+		Profile[Profile Snapshot + Refinement]
+		ExaSvc[Exa Service - rate-limited]
+		LLM[LLM Service - dynamic providers]
+		Analysis[Analysis Service - sentiment, momentum, pulse]
 	end
 
-	subgraph External APIs
+	subgraph External_APIs [External APIs]
 		Exa[(Exa Search)]
 		Groq[(Groq LLM)]
 		Gemini[(Gemini LLM)]
@@ -41,7 +41,7 @@ flowchart LR
 
 	Modal --> Store
 	Store --> UI
-	UI -->|Start Stream (domain + encoded keys)| Stream
+	UI -->|domain + encoded keys| Stream
 	Stream --> ExaSvc --> Exa
 	Stream --> Canonical
 	Stream --> Profile --> LLM
@@ -52,6 +52,7 @@ flowchart LR
 	Stream --> UI
 	ExaSvc --> Analysis
 	ExaSvc --> Profile
+
 ```
 
 ### Progressive Streaming Stages
