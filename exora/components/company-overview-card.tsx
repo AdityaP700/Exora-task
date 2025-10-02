@@ -3,10 +3,14 @@
 
 import { Linkedin, Twitter, Globe, Building, Calendar, MapPin, Users, Shield } from "lucide-react";
 import type { CompanyProfile, FounderInfo } from "@/lib/types";
+import { useApiKeyStore } from '@/lib/store';
 
 interface Props { profile: CompanyProfile | null; founders: FounderInfo[]; sentimentScore?: number }
 
 export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props) {
+  const { validation } = useApiKeyStore();
+  const activeProviders = (['groq','gemini','openai'] as const).filter(p => validation?.[p]?.status === 'valid').length;
+  const totalLlms = (['groq','gemini','openai'] as const).filter(p => validation?.[p]).length;
   if (!profile) {
     return (
       <div className="glass sketch-border rounded-xl p-7 animate-pulse space-y-4">
@@ -63,22 +67,31 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
               {displayDomain}
             </a>
           </div>
-        {profile.profileDataQuality && (
-          <div className="flex flex-col items-end gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-slate-500">Data Quality</span>
-            <span
-              className={
-                "px-2 py-0.5 rounded-full text-[11px] font-medium border " +
-                (profile.profileDataQuality === 'high'
-                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-400/30'
-                  : profile.profileDataQuality === 'medium'
-                  ? 'bg-amber-500/10 text-amber-300 border-amber-400/30'
-                  : 'bg-slate-600/20 text-slate-300 border-slate-500/30')
-              }
-              title="Heuristic completeness of core company fields"
-            >
-              {profile.profileDataQuality}
-            </span>
+        {(profile.profileDataQuality || activeProviders>=0) && (
+          <div className="flex flex-col items-end gap-1 min-w-[120px]">
+            <div className="flex items-center gap-2">
+              {profile.profileDataQuality && (
+                <span
+                  className={
+                    "px-2 py-0.5 rounded-full text-[10px] font-medium border " +
+                    (profile.profileDataQuality === 'high'
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-400/30'
+                      : profile.profileDataQuality === 'medium'
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-400/30'
+                      : 'bg-slate-600/20 text-slate-300 border-slate-500/30')
+                  }
+                  title="Heuristic completeness of core company fields"
+                >
+                  DQ: {profile.profileDataQuality}
+                </span>
+              )}
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-medium border bg-cyan-500/10 text-cyan-300 border-cyan-400/30"
+                title="Count of validated LLM provider keys active (excludes Exa retrieval key)"
+              >
+                AI: {activeProviders}/{totalLlms}
+              </span>
+            </div>
           </div>
         )}
         </div>
@@ -131,7 +144,7 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
         )}
 
         <div>
-          <h3 className="text-[11px] tracking-wider text-slate-500 mb-2">HUMANS</h3>
+          <h3 className="text-[11px] tracking-wider text-slate-500 mb-2">Founder</h3>
           {prioritizedFounders && prioritizedFounders.length > 0 ? (
             <div className="grid grid-cols-1 gap-3">
               {prioritizedFounders.map((f,i)=>{

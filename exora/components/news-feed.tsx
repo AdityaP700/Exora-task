@@ -38,7 +38,7 @@ export function NewsFeed({ title, items }: { title: string; items: EventLogItem[
                   <div>
                     <h3 className="text-base font-medium text-slate-100 leading-snug mb-1.5 group-hover:text-cyan-300 transition-colors">{item.headline}</h3>
                     <p className="text-xs text-slate-400">
-                      {item.source || new URL(item.url).hostname} • {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
+                      {(() => { try { return new URL(item.url).hostname.replace(/^www\./,'') } catch { return 'news' } })()} • {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
                     </p>
                   </div>
                   <ExternalLink className="w-4 h-4 text-slate-500 flex-shrink-0 ml-4 mt-1 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />

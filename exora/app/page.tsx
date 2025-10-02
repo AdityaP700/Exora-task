@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useApiKeyStore } from '@/lib/store';
 import { motion, AnimatePresence } from "framer-motion";
 
 // Import all our functional components and types
@@ -162,33 +163,63 @@ export default function ExoraPage() {
         localStorage.setItem("exora:lastQuery", cleanedDomain);
       } catch {}
 
+      // Ensure Exa key present (BYOK gating)
+      try {
+        const { exaApiKey, openModal } = useApiKeyStore.getState();
+        if (!exaApiKey) {
+          openModal();
+          setError('Exa API key required. Add it to proceed.');
+          return;
+        }
+      } catch {}
+
       // Open SSE stream
       if (esRef.current) {
         esRef.current.close();
         esRef.current = null;
       }
-      const es = new EventSource(
-        `/api/briefing/stream?domain=${cleanedDomain}`
-      );
-      esRef.current = es;
+      // Inject user-provided API keys (BYOK) encoded client-side so server can build dynamic providers.
+      let es: EventSource | null = null;
+      try {
+        const { exaApiKey, groqApiKey, geminiApiKey, openAiApiKey } = useApiKeyStore.getState();
+        const keyPayload: Record<string,string> = {};
+        if (exaApiKey) keyPayload.exa = exaApiKey.trim();
+        if (groqApiKey) keyPayload.groq = groqApiKey.trim();
+        if (geminiApiKey) keyPayload.gemini = geminiApiKey.trim();
+        if (openAiApiKey) keyPayload.openai = openAiApiKey.trim();
+        const b64 = Object.keys(keyPayload).length
+          ? encodeURIComponent(
+              btoa(unescape(encodeURIComponent(JSON.stringify(keyPayload))))
+                .replace(/=/g,'')
+                .replace(/\+/g,'-')
+                .replace(/\//g,'_')
+            )
+          : '';
+        const url = `/api/briefing/stream?domain=${cleanedDomain}` + (b64 ? `&keys=${b64}` : '');
+        es = new EventSource(url);
+        esRef.current = es;
+      } catch {
+        es = new EventSource(`/api/briefing/stream?domain=${cleanedDomain}`);
+        esRef.current = es;
+      }
       setIsStreaming(true);
 
+      if (!es) return;
       es.addEventListener("overview", (ev: MessageEvent) => {
         try {
           const { overview: text } = JSON.parse(ev.data);
           setOverview(text || "");
           // Bootstrap a minimal profile fast
-          setProfile(
-            (prev) =>
-              prev ??
-              ({
-                name: cleanedDomain.split(".")[0],
-                domain: cleanedDomain,
-                description: text || `Company at ${cleanedDomain}`,
-                ipoStatus: "Unknown",
-                socials: {},
-              } as CompanyProfile)
-          );
+          setProfile((prev) => {
+            if (prev) return prev;
+            return {
+              name: cleanedDomain.split(".")[0],
+              domain: cleanedDomain,
+              description: text || `Company at ${cleanedDomain}`,
+              ipoStatus: "Unknown",
+              socials: {},
+            } as CompanyProfile;
+          });
         } catch {}
       });
 
@@ -220,24 +251,22 @@ export default function ExoraPage() {
           const { profile: incoming } = JSON.parse(ev.data);
           if (!incoming) return;
           setProfile((prev) => {
-            if (!prev) return incoming; // first rich snapshot
-            // Merge heuristics: prefer longer description & populated fields
-            const merged: CompanyProfile = { ...prev } as CompanyProfile;
-            const descBetter = (incoming.description || '').length > (prev.description || '').length + 25;
-            if (descBetter) merged.description = incoming.description;
-            if (!prev.brief && incoming.brief) merged.brief = incoming.brief;
-            const copyIf = <K extends keyof CompanyProfile>(k: K) => {
-              if (incoming[k] && !prev[k]) (merged as any)[k] = incoming[k];
-            };
-            copyIf('industry');
-            copyIf('foundedYear');
-            copyIf('headquarters');
-            copyIf('headcountRange');
-            copyIf('employeeCountApprox');
-            copyIf('ipoStatus');
-            if (incoming.socials && Object.keys(incoming.socials).length) {
-              merged.socials = { ...(prev.socials||{}), ...incoming.socials };
+            if (!prev) return incoming;
+            // Avoid updates if nothing materially changed
+            const fieldsToCheck: (keyof CompanyProfile)[] = ['description','brief','industry','foundedYear','headquarters','headcountRange','employeeCountApprox','ipoStatus','profileDataQuality','canonicalName'];
+            let changed = false;
+            for (const f of fieldsToCheck) {
+              if ((incoming as any)[f] && (incoming as any)[f] !== (prev as any)[f]) { changed = true; break; }
             }
+            const socialsChanged = JSON.stringify(incoming.socials||{}) !== JSON.stringify(prev.socials||{});
+            const aliasesChanged = !!(incoming.aliases && incoming.aliases.join('|') !== (prev.aliases||[]).join('|'));
+            if (!changed && !socialsChanged && !aliasesChanged) return prev;
+            const merged: CompanyProfile = { ...prev } as CompanyProfile;
+            if ((incoming.description||'').length > (prev.description||'').length + 25) merged.description = incoming.description;
+            if (!prev.brief && incoming.brief) merged.brief = incoming.brief;
+            const copyIf = <K extends keyof CompanyProfile>(k: K) => { if (incoming[k] && !prev[k]) (merged as any)[k] = incoming[k]; };
+            copyIf('industry'); copyIf('foundedYear'); copyIf('headquarters'); copyIf('headcountRange'); copyIf('employeeCountApprox'); copyIf('ipoStatus');
+            if (incoming.socials && Object.keys(incoming.socials).length) merged.socials = { ...(prev.socials||{}), ...incoming.socials };
             if (incoming.profileDataQuality) merged.profileDataQuality = incoming.profileDataQuality;
             if (incoming.canonicalName) merged.canonicalName = incoming.canonicalName;
             if (incoming.aliases?.length) merged.aliases = incoming.aliases;
@@ -364,19 +393,20 @@ export default function ExoraPage() {
     }));
   }, [competitorNews]);
 
-  const analysisData: BriefingResponse | null = useMemo(() => {
+  // Ensure a mock profile exists (once) when a domain is set but profile not yet streamed
+  useEffect(() => {
     if (!profile && domain) {
-      // Create a mock profile if it doesn't exist, to allow rendering the new dashboard
-      const mockProfile: CompanyProfile = {
-        name: domain.split(".")[0],
-        domain: domain,
+      setProfile({
+        name: domain.split('.')[0],
+        domain,
         description: `Company at ${domain}`,
-        ipoStatus: "Unknown",
+        ipoStatus: 'Unknown',
         socials: {},
-      };
-      setProfile(mockProfile);
+      });
     }
+  }, [profile, domain]);
 
+  const analysisData: BriefingResponse | null = useMemo(() => {
     if (!profile) return null;
 
     const domains = [domain, ...competitors];

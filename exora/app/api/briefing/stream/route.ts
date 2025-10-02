@@ -74,17 +74,38 @@ export async function GET(req: Request) {
   let canonical: { canonicalName: string; aliases: string[]; industryHint?: string; brandTokens?: string[] } | null = null
   const refreshProfile = searchParams.get('refreshProfile') === 'true'
 
-  const exaKey = process.env.EXA_API_KEY
-  const groqKey = process.env.GROQ_API_KEY
-  const openAiKey = process.env.OPENAI_API_KEY
-  const geminiKey = process.env.GEMINI_API_KEY
-  if (!exaKey) return NextResponse.json({ error: 'Missing EXA_API_KEY' }, { status: 500 })
+  // BYOK: decode optional keys param (base64url JSON { exa, groq, gemini, openai })
+  let userKeys: Partial<Record<'exa'|'groq'|'gemini'|'openai', string>> = {}
+  const keysParam = searchParams.get('keys')
+  if (keysParam) {
+    try {
+      const padded = keysParam.replace(/-/g,'+').replace(/_/g,'/')
+      const json = decodeURIComponent(Buffer.from(padded, 'base64').toString('utf8'))
+    } catch {}
+    try {
+      // Second attempt: direct base64url decode without decodeURIComponent
+      const normalized = keysParam.replace(/-/g,'+').replace(/_/g,'/')
+      const buf = Buffer.from(normalized, 'base64')
+      const raw = buf.toString('utf8')
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        userKeys = parsed
+      }
+    } catch {}
+  }
 
-  const llmProviders: ProviderConfig[] = [
-    { provider: 'groq', apiKey: groqKey, model: 'llama-3.1-8b-instant' },
-    { provider: 'gemini', apiKey: geminiKey, model: 'gemini-2.0-flash' },
-    { provider: 'openai', apiKey: openAiKey, model: 'gpt-4o-mini' },
-  ]
+  const exaKey = (userKeys.exa || process.env.EXA_API_KEY || '').trim()
+  const groqKey = (userKeys.groq || process.env.GROQ_API_KEY || '').trim()
+  const openAiKey = (userKeys.openai || process.env.OPENAI_API_KEY || '').trim()
+  const geminiKey = (userKeys.gemini || process.env.GEMINI_API_KEY || '').trim()
+
+  if (!exaKey) return NextResponse.json({ error: 'Missing Exa API key' }, { status: 400 })
+
+  const llmProviders: ProviderConfig[] = []
+  if (groqKey) llmProviders.push({ provider: 'groq', apiKey: groqKey, model: 'llama-3.1-8b-instant' })
+  if (geminiKey) llmProviders.push({ provider: 'gemini', apiKey: geminiKey, model: 'gemini-2.0-flash' })
+  if (openAiKey) llmProviders.push({ provider: 'openai', apiKey: openAiKey, model: 'gpt-4o-mini' })
+  // If user provided no LLM keys, llmProviders remains empty; downstream safeGenerate* functions should degrade gracefully
 
   const stream = new ReadableStream({
     async start(controller) {

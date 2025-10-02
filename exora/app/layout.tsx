@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import { Analytics } from "@vercel/analytics/next"
-// import { Providers } from "@/components/providers";
+import { Providers } from "@/components/providers";
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -24,9 +24,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               backgroundImage: `radial-gradient(circle at 50% 50%, rgba(58, 123, 255, 0.15) 0%, rgba(123, 104, 238, 0.07) 35%, transparent 50%)`,
             }}
           />
-          {/* Content wrapped in the new Provider */}
+          {/* Content wrapped in Providers so global client features (ApiKeyModal) mount */}
           <div className="relative z-10">
-         {children}
+            <Providers>
+              {children}
+            </Providers>
           </div>
         </div>
         <Analytics />

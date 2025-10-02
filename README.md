@@ -1,7 +1,124 @@
-# Exora 
+# Exora
 <img width="1916" height="937" alt="image" src="https://github.com/user-attachments/assets/2e577a12-5331-4363-97f2-9c29ffe8dcd4" />
 
-A Next.js app that streams a VC-grade competitive briefing progressively: instant company overview and founders, followed by news, competitor updates, sentiment analysis, and an executive summary. All external API calls are globally rate-limited to respect provider constraints.
+Exora streams a VC-grade competitive briefing progressively: instant company overview and founders, followed by canonical enrichment, news, competitor updates, sentiment analytics (with enhanced transparency), and an executive summary. External API calls are globally rate‑limited and can now leverage user-provided API keys (BYOK) for Exa + multiple LLM vendors.
+
+## High-Level Architecture
+
+The system is designed around progressive disclosure, resilience, and pluggable intelligence providers.
+
+Mermaid summarizing the top-level component & service relationships:
+
+```mermaid
+flowchart LR
+	subgraph Client (Next.js App)
+		UI[App Page / React State]\n(SSE Consumer)
+		Modal[API Key Modal]\n(BYOK)
+		Store[Zustand Store]\n(keys + validation)
+		Charts[Sentiment & Benchmarks]
+		OverviewCard[CompanyOverviewCard]\n(DQ + AI coverage)
+	end
+
+	subgraph Server (API Routes)
+		Stream[/api/briefing/stream\nSSE Orchestrator/]
+		Batch[/api/briefing (legacy batch)/]
+	end
+
+	subgraph Services
+		Canonical[canonical inference]
+		Profile[profile snapshot + refinement]
+		ExaSvc[exa-service]\n(rate-limited)
+		LLM[llm-service]\n(dynamic providers)
+		Analysis[analysis-service]\n(sentiment,momentum,pulse)
+	end
+
+	subgraph External APIs
+		Exa[(Exa Search)]
+		Groq[(Groq LLM)]
+		Gemini[(Gemini LLM)]
+		OpenAI[(OpenAI LLM)]
+	end
+
+	Modal --> Store
+	Store --> UI
+	UI -->|Start Stream (domain + encoded keys)| Stream
+	Stream --> ExaSvc --> Exa
+	Stream --> Canonical
+	Stream --> Profile --> LLM
+	Stream --> Analysis --> LLM
+	LLM --> Groq
+	LLM --> Gemini
+	LLM --> OpenAI
+	Stream --> UI
+	ExaSvc --> Analysis
+	ExaSvc --> Profile
+```
+
+### Progressive Streaming Stages
+1. `overview` – Fast TL;DR + bootstrap minimal profile shell.
+2. `canonical` – Canonical name + alias inference + industry hint.
+3. `profile` – Multi-pass enriched profile (description, headcount heuristics, data quality score).
+4. `founders` / `socials` – Leadership & social URLs.
+5. `competitors` – Discovered or heuristic competitor domains.
+6. `company-news` – Ranked recent high-signal headlines.
+7. `competitor-news` – Aggregated peer coverage.
+8. `sentiment` – Sentiment, narrative momentum, pulse index, historical synthesis, enhanced sentiment transparency payload.
+9. `summary` – Executive bullet points.
+10. `done` – Stream completion signal.
+
+### Concurrency & Resilience
+* A shared limiter (`lib/limiter.ts`) caps concurrent external requests (default: 5).
+* LLM calls degrade sequentially across user-provided providers, then lexical fallback (deterministic heuristic sentiment + minimal narrative) if none survive.
+* News & sentiment scoring integrate alias filtering + query expansion for better recall while reducing false positives.
+
+### BYOK (Bring Your Own Keys)
+Users supply API keys locally (never sent to server storage):
+* Keys are persisted in `localStorage` via a Zustand `useApiKeyStore` with per‑provider validation state (valid, invalid, validating, unknown).
+* On search, present keys are JSON encoded, base64url compressed, and appended as a `keys` query param to the SSE URL.
+* The server decodes the payload and dynamically assembles the active provider list. Missing providers are simply skipped.
+* Exa key is mandatory; UI gating shows the modal if absent.
+* The `CompanyOverviewCard` displays an AI coverage badge (count of validated LLM providers) alongside profile data quality (DQ).
+
+Sequence diagram for a typical streaming request with BYOK:
+
+```mermaid
+sequenceDiagram
+	participant User
+	participant UI as Client UI
+	participant Store as Key Store (Zustand)
+	participant Stream as /api/briefing/stream
+	participant Exa as Exa API
+	participant LLM as llm-service
+	participant Providers as Groq/Gemini/OpenAI
+
+	User->>UI: Enter domain & submit
+	UI->>Store: Read keys (exa, groq, gemini, openai)
+	UI->>Stream: SSE connect (domain + base64url(keys))
+	Stream->>Stream: Decode keys & build provider list
+	Stream->>Exa: Fetch initial signals (overview/news)
+	Stream-->>UI: event: overview
+	Stream->>LLM: Profile refinement / sentiment (if providers)
+	LLM->>Providers: First available provider call
+	Providers-->>LLM: Response / (or failure)
+	alt Provider chain fails
+		Stream->>Stream: Lexical fallback sentiment
+	end
+	Stream-->>UI: canonical, profile, founders, socials
+	Stream->>Exa: Competitors & news queries
+	Exa-->>Stream: Results (filtered by aliases)
+	Stream-->>UI: company-news, competitor-news
+	Stream-->>UI: sentiment (metrics + enhancedSentiment)
+	Stream-->>UI: summary
+	Stream-->>UI: done
+```
+
+### Enhanced Sentiment Transparency
+The `sentiment` event can include `enhancedSentiment` (overall score, component breakdown, qualitative factors, confidence, method tag). UIs can selectively expose this for power users or debugging.
+
+### Data Quality Scoring
+Profile completeness is heuristically scored (`high` / `medium` / `low`) based on presence and richness of core fields (industry, description length, headcount, founders, socials). Shown as a badge.
+
+---
 
 ## Why this architecture
 
@@ -53,13 +170,15 @@ A Next.js app that streams a VC-grade competitive briefing progressively: instan
 
 ## Env configuration
 
-Create `.env.local` with keys (only read server-side):
+Create `.env.local` if you want server defaults (these act as fallbacks when user BYOK keys are not provided):
 
-- `EXA_API_KEY` (required)
-- `GROQ_API_KEY` (optional but recommended)
-- `OPENAI_API_KEY` (optional)
-- `GEMINI_API_KEY` (optional)
-- `NEWS_API_KEY` (optional; used by batch route as fallback)
+- `EXA_API_KEY` (server fallback — UI still requires Exa via BYOK if not set)
+- `GROQ_API_KEY` (optional fallback)
+- `OPENAI_API_KEY` (optional fallback)
+- `GEMINI_API_KEY` (optional fallback)
+- `NEWS_API_KEY` (optional; used by legacy batch route)
+
+If a user supplies keys via the modal, those override env values for that session’s stream.
 
 ## Run locally
 
@@ -103,6 +222,9 @@ event: overview
 - Cache competitor discovery per domain to reduce LLM calls.
 - Persist partial results to localStorage during streaming for refresh resilience.
 - Optional: WebSocket transport for bi-directional interactions; SSE suffices for unidirectional streams.
+- SSE key-status echo event (optionally confirm accepted providers early).
+- Encrypted at-rest storage for keys using WebCrypto + user passphrase.
+- Provider usage counters & soft warnings before quota exhaustion.
 
 ---
 

@@ -380,10 +380,7 @@ export function CompetitorSentimentChart({ data }: { data: { domain: string; sen
               axisLine={false}
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
             />
-            <ChartTooltip
-              cursor={false}
-              content={<ChartTooltipContent hideLabel />}
-            />
+            <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
             <Bar dataKey="sentiment" radius={5}>
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.fill} />
