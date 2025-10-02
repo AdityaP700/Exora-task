@@ -33,6 +33,24 @@ import { DetailedSentimentAnalysis } from "@/components/detailed-sentiment-analy
 import { CompetitorSentimentComparison } from "@/components/competitor-sentiment-comparison";
 import { FeatureCards } from "@/components/feature-cards";
 
+// Lightweight EXA usage / billing transparency banner (with compact variant)
+function ExaUsageBanner({ compact = false }: { compact?: boolean }) {
+  return (
+    <div
+      className={
+        "rounded-md border border-blue-900/40 bg-gradient-to-r from-blue-950/60 to-slate-900/40 backdrop-blur px-4 py-3 text-left shadow-inner shadow-blue-900/20 " +
+        (compact ? "mt-3" : "mt-6")
+      }
+    >
+      <p className="text-[11px] leading-relaxed text-slate-300/90">
+        <span className="font-semibold text-slate-200">Data Notice:</span> Each search dispatches live Exa API calls (search + news) using <span className="font-medium">your provided Exa key</span>. You are billed directly by Exa per their pricing after 500 searches. We don’t store or proxy your key beyond this session.
+        {" "}
+        <span className="text-slate-400">LLM summaries & sentiment may be probabilistic; always verify critical facts.</span>
+      </p>
+    </div>
+  );
+}
+
 // A skeleton loader that matches the final results layout
 function DashboardSkeleton() {
   return (
@@ -509,7 +527,7 @@ export default function ExoraPage() {
   const showInlineHero = hasStarted;
 
   return (
-    <div className="min-h-screen w-full bg-page-background text-white relative overflow-hidden">
+  <div className="min-h-screen w-full bg-page-background text-white relative">
       <div
         className="absolute inset-0 z-0 opacity-50"
         style={{
@@ -544,12 +562,15 @@ export default function ExoraPage() {
                 exit={{ opacity: 0 }}
                 className="container mx-auto px-4 text-center"
               >
-                <div className="w-full max-w-3xl mx-auto mb-8">
+                <div className="w-full max-w-3xl mx-auto mb-4">
                   <AIInputWithSearch
                     placeholder="Try a different company URL..."
                     onSubmit={(value) => handleSearch(value)}
                     className="[& textarea]:h-10"
                   />
+                </div>
+                <div className="w-full max-w-3xl mx-auto mb-8">
+                  <ExaUsageBanner compact />
                 </div>
                 <div className="text-center text-red-400 p-4">
                   <h3 className="font-bold text-lg">Analysis Failed</h3>
@@ -570,12 +591,15 @@ export default function ExoraPage() {
                 exit={{ opacity: 0 }}
               >
                 <div className="container mx-auto px-4 pt-4">
-                  <div className="w-full max-w-3xl mx-auto mb-8">
+                  <div className="w-full max-w-3xl mx-auto mb-4">
                     <AIInputWithSearch
                       placeholder="Search for another company..."
                       onSubmit={(value) => handleSearch(value)}
                       className="[& textarea]:h-10"
                     />
+                  </div>
+                  <div className="w-full max-w-3xl mx-auto mb-8">
+                    <ExaUsageBanner compact />
                   </div>
 
                   <div className="mb-8 flex items-center justify-center">
@@ -714,6 +738,7 @@ export default function ExoraPage() {
                       onSubmit={(value) => handleSearch(value)}
                       className="[& textarea]:h-12 [& textarea]:text-base"
                     />
+                    <ExaUsageBanner />
 
                     <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs">
                       <span className="text-slate-500">Try:</span>
@@ -766,7 +791,7 @@ export default function ExoraPage() {
                     )}
                   </div>
                 </div>
-                <FeatureCards />
+               
               </motion.div>
             )}
           </AnimatePresence>

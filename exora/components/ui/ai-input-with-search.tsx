@@ -78,7 +78,7 @@ export function AIInputWithSearch({
           <div className="h-12 bg-black/5 dark:bg-white/5 rounded-b-xl">
             <div className="absolute left-3 bottom-3 flex items-center gap-2">
 
-              <button
+              {/* <button
                 type="button"
                 onClick={() => setShowSearch(!showSearch)}
                 className={cn(
@@ -87,7 +87,7 @@ export function AIInputWithSearch({
                     ? "bg-sky-500/15 border-sky-400 text-sky-500"
                     : "bg-black/5 dark:bg-white/5 border-transparent text-black/40 dark:text-white/40 hover:text-black dark:hover:text-white"
                 )}
-              >
+              > */}
                 <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
                   <motion.div
                     animate={{
@@ -109,17 +109,17 @@ export function AIInputWithSearch({
                       damping: 25,
                     }}
                   >
-                    <Globe
+                    {/* <Globe
                       className={cn(
                         "w-4 h-4",
                         showSearch
                           ? "text-sky-500"
                           : "text-inherit"
                       )}
-                    />
+                    /> */}
                   </motion.div>
                 </div>
-                <AnimatePresence>
+                {/* <AnimatePresence>
                   {showSearch && (
                     <motion.span
                       initial={{ width: 0, opacity: 0 }}
@@ -134,8 +134,8 @@ export function AIInputWithSearch({
                       Search
                     </motion.span>
                   )}
-                </AnimatePresence>
-              </button>
+                </AnimatePresence> */}
+              
             </div>
             <div className="absolute right-3 bottom-3">
               <button
@@ -154,6 +154,6 @@ export function AIInputWithSearch({
           </div>
         </div>
       </div>
-    </div>
+  </div>
   );
 }

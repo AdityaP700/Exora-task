@@ -214,7 +214,7 @@ event: overview
 - `lib/limiter.ts` - Global concurrency limiter.
 - `lib/exa-service.ts` - Exa calls, rate-limited.
 - `lib/llm-service.ts` - Groq/OpenAI/Gemini calls, rate-limited.
-- `app/page.tsx` - Consumes the stream and renders progressively.
+- `app/page.tsx` - Consumes the stream and renders progressively.aa
 
 ## Notes & future improvements
 

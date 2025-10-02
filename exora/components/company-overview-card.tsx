@@ -85,12 +85,12 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
                   DQ: {profile.profileDataQuality}
                 </span>
               )}
-              <span
+              {/* <span
                 className="px-2 py-0.5 rounded-full text-[10px] font-medium border bg-cyan-500/10 text-cyan-300 border-cyan-400/30"
                 title="Count of validated LLM provider keys active (excludes Exa retrieval key)"
               >
                 AI: {activeProviders}/{totalLlms}
-              </span>
+              </span> */}
             </div>
           </div>
         )}

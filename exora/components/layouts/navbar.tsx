@@ -3,10 +3,40 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Search, Github } from "lucide-react";
+import { Search, Github, Star } from "lucide-react";
 import { HoverButton } from "@/components/ui/hover-button";
 
 export function Navbar() {
+  const [stars, setStars] = React.useState<number | null>(null);
+  const [starLoading, setStarLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch("https://api.github.com/repos/AdityaP700/Exora-task", { next: { revalidate: 300 } as any });
+        if (!res.ok) throw new Error("Failed to load stars");
+        const json = await res.json();
+        if (mounted) setStars(json.stargazers_count ?? null);
+      } catch {
+        if (mounted) setStars(null);
+      } finally {
+        if (mounted) setStarLoading(false);
+      }
+    })();
+    return () => { mounted = false };
+  }, []);
+  const handleSearchClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    // Try to find a visible AI input textarea
+    const el = document.querySelector<HTMLTextAreaElement>("textarea[placeholder*='company URL']") ||
+      document.querySelector<HTMLTextAreaElement>("textarea[placeholder*='another company']") ||
+      document.querySelector<HTMLTextAreaElement>("textarea");
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => el.focus(), 300);
+    }
+  };
   const navItems = [
     { name: "Search", icon: Search },
     {
@@ -26,20 +56,45 @@ export function Navbar() {
         className="flex items-center justify-between p-2 rounded-full bg-slate-900/50 backdrop-blur-lg border border-slate-700/50 shadow-lg"
       >
         <nav className="flex items-center gap-1">
-          {navItems.map((item) => (
-            <a
-              key={item.name}
-              href={item.href || "#"}
-              target={item.external ? "_blank" : "_self"}
-              rel={item.external ? "noopener noreferrer" : undefined}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white transition-colors rounded-full hover:bg-slate-800/50"
-            >
-              <item.icon className="w-4 h-4" />
-              <span>{item.name}</span>
-            </a>
-          ))}
+          {navItems.map((item) => {
+            if (item.name === 'Search') {
+              return (
+                <button
+                  key={item.name}
+                  onClick={handleSearchClick}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white transition-colors rounded-full hover:bg-slate-800/50"
+                >
+                  <item.icon className="w-4 h-4" />
+                  <span>{item.name}</span>
+                </button>
+              )
+            }
+            return (
+              <a
+                key={item.name}
+                href={item.href || "#"}
+                target={item.external ? "_blank" : "_self"}
+                rel={item.external ? "noopener noreferrer" : undefined}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white transition-colors rounded-full hover:bg-slate-800/50"
+              >
+                <item.icon className="w-4 h-4" />
+                <span>{item.name}</span>
+              </a>
+            )
+          })}
         </nav>
-        <HoverButton className="px-4 py-1.5 text-sm">Try It Now</HoverButton>
+        <a
+          href="https://github.com/AdityaP700/Exora-task"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group flex items-center gap-2 px-4 py-1.5 text-sm rounded-full bg-gradient-to-r from-slate-800/80 to-slate-700/60 hover:from-slate-700 hover:to-slate-600 border border-slate-600/60 text-slate-200 hover:text-white transition-colors"
+        >
+          <Star className="w-4 h-4 text-yellow-400 group-hover:scale-110 transition-transform" />
+          <span className="font-medium">Star the Repo</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-900/70 border border-slate-600/50">
+            {starLoading ? '…' : (stars ?? '—')}
+          </span>
+        </a>
       </motion.div>
     </header>
   );
