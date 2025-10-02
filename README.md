@@ -126,7 +126,68 @@ Profile completeness is heuristically scored (`high` / `medium` / `low`) based o
 - Global rate limiting: A shared concurrency limiter guarantees no more than 5 external requests run in parallel, preventing API 429s and smoothing load.
 - Resilient providers: Exa (news/mentions) + Groq/OpenAI/Gemini (LLMs) with clean fallbacks ensure reliable results.
 - Familiar, fast stack: Next.js App Router, React, TypeScript, Tailwind, and Recharts provide great DX and performance.
+```mermaid
+flowchart TD
+    %% Frontend
+    A[Next.js App] -->|SSE /api/briefing/stream| B[Streaming UI Components]
+    B --> B1[Overview: Company & Founders]
+    B --> B2[News Feed & Competitor News]
+    B --> B3[Analysis: Charts & Metrics]
+    B --> B4[Summary: Executive Insights]
 
+    %% Backend
+    A -->|Batch /api/briefing| C[Batch REST Endpoint ]
+    C -->|Validate Domain| D[AI Bouncer]
+    C -->|Competitor Discovery| E[Groq/OpenAI/Gemini]
+    C -->|Fetch Mentions & News| F[Exa Service / NewsAPI Fallback]
+    C -->|Compute Metrics| G[Analysis Service]
+    C -->|Generate Summary| H[Executive Summary Service]
+
+    %% Streaming flow
+    A -->|SSE /api/briefing/stream| I[Streaming Endpoint]
+    I --> J[Emit Stages]
+    J --> J1[overview]
+    J --> J2[founders]
+    J --> J3[socials]
+    J --> J4[competitors]
+    J --> J5[company-news]
+    J --> J6[competitor-news]
+    J --> J7[sentiment + metrics]
+    J --> J8[summary]
+    J --> J9[done]
+
+    %% Services & Utilities
+    F --> K[Rate Limiter ]
+    E --> K
+    G --> K
+    F -->|Normalize Dates & Deduplicate| L[Utils ]
+    G --> M[Sentiment & Momentum Calculations]
+    H --> N[Fallbacks & Super Prompt]
+
+    %% Data Contracts
+    J --> O[Types: BriefingResponse, BenchmarkMatrixItem, NewsItem, EventLogItem]
+
+    %% Edge Cases
+    D --> P[Invalid Domain Handling]
+    F --> Q[Empty Exa Results → NewsAPI Fallback]
+    G --> R[Sparse Data → Default Metrics]
+    E --> S[LLM Failures → Safe Fallbacks]
+
+    %% Notes
+    style A fill:#1f2937,stroke:#ffffff,color:#ffffff
+    style B fill:#111827,stroke:#ffffff,color:#ffffff
+    style C fill:#111827,stroke:#ffffff,color:#ffffff
+    style I fill:#1f2937,stroke:#ffffff,color:#ffffff
+    style K fill:#374151,stroke:#ffffff,color:#ffffff
+    style L fill:#374151,stroke:#ffffff,color:#ffffff
+    style M fill:#4b5563,stroke:#ffffff,color:#ffffff
+    style N fill:#4b5563,stroke:#ffffff,color:#ffffff
+    style O fill:#6b7280,stroke:#ffffff,color:#ffffff
+    style P fill:#b91c1c,stroke:#ffffff,color:#ffffff
+    style Q fill:#b91c1c,stroke:#ffffff,color:#ffffff
+    style R fill:#b91c1c,stroke:#ffffff,color:#ffffff
+    style S fill:#b91c1c,stroke:#ffffff,color:#ffffff
+```
 ## Tech stack and rationale
 
 - Next.js (App Router): Serverless API routes and React Server/Client components with great DX, edge-friendly primitives, and streaming support.
