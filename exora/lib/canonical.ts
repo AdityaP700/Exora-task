@@ -1,4 +1,4 @@
-import cheerio from 'cheerio'
+import * as cheerio from 'cheerio'
 import { safeGenerateJson, safeGenerateText, ProviderConfig } from '@/lib/llm-service'
 
 // In-memory cache for canonical info
