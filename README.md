@@ -1,7 +1,34 @@
 # Exora
-<img width="1916" height="937" alt="image" src="https://github.com/user-attachments/assets/2e577a12-5331-4363-97f2-9c29ffe8dcd4" />
+
+<div align="center">
+	
+<img width="200" src="https://github.com/user-attachments/assets/cdf3b052-6e12-4f8c-8192-323234caa62b" alt="Exora Logo" />
+
+*Real-time competitive intelligence scraper powered by Exa search capabilities*
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Next.js](https://img.shields.io/badge/Next.js-13+-black?logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-4.9+-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3+-cyan?logo=tailwindcss)](https://tailwindcss.com/)
+[![Recharts](https://img.shields.io/badge/Recharts-2+-orange?logo=chart.js)](https://recharts.org/)
+[![Exa API](https://img.shields.io/badge/Exa-Search-red)](https://exa.com/)
+[![Groq](https://img.shields.io/badge/Groq-LLM-purple)](https://groq.com/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-LLM-pink)](https://openai.com/)
+[![Gemini](https://img.shields.io/badge/Gemini-LLM-blueviolet)](https://www.gemini.com/)
+
+• [🐛 **Report Bug**](https://github.com/AdityaP700/Exora-task/issues) • [**Request Feature**](https://github.com/AdityaP700/Exora-task/issues)
+
+</div>
+
+---
 
 Exora streams a VC-grade competitive briefing progressively: instant company overview and founders, followed by canonical enrichment, news, competitor updates, sentiment analytics (with enhanced transparency), and an executive summary. External API calls are globally rate‑limited and can now leverage user-provided API keys (BYOK) for Exa + multiple LLM vendors.
+
+<div align="center">
+	
+<img width="1915" height="915" alt="image" src="https://github.com/user-attachments/assets/b691565b-6210-415f-8594-212fc3cf4a4e" />
+	
+</div>
 
 ---
 ## High-Level Architecture
@@ -74,6 +101,10 @@ flowchart LR
 * News & sentiment scoring integrate alias filtering + query expansion for better recall while reducing false positives.
 
 ### BYOK (Bring Your Own Keys)
+<div align="center">
+	<img width="1919" height="934" alt="image" src="https://github.com/user-attachments/assets/4458b13e-9f1e-436e-893a-c36eb868d576" />
+
+</div>
 Users supply API keys locally (never sent to server storage):
 * Keys are persisted in `localStorage` via a Zustand `useApiKeyStore` with per‑provider validation state (valid, invalid, validating, unknown).
 * On search, present keys are JSON encoded, base64url compressed, and appended as a `keys` query param to the SSE URL.
@@ -115,6 +146,10 @@ sequenceDiagram
 ```
 
 ### Enhanced Sentiment Transparency
+<div align="center">
+	<img width="1919" height="971" alt="image" src="https://github.com/user-attachments/assets/8de1c0ae-5825-469a-a7c3-cf6ce18289ac" />
+
+</div>
 The `sentiment` event can include `enhancedSentiment` (overall score, component breakdown, qualitative factors, confidence, method tag). UIs can selectively expose this for power users or debugging.
 
 ### Data Quality Scoring
