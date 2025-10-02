@@ -3,6 +3,7 @@
 
 Exora streams a VC-grade competitive briefing progressively: instant company overview and founders, followed by canonical enrichment, news, competitor updates, sentiment analytics (with enhanced transparency), and an executive summary. External API calls are globally rate‑limited and can now leverage user-provided API keys (BYOK) for Exa + multiple LLM vendors.
 
+---
 ## High-Level Architecture
 
 The system is designed around progressive disclosure, resilience, and pluggable intelligence providers.
@@ -277,16 +278,109 @@ event: overview
 - `lib/exa-service.ts` - Exa calls, rate-limited.
 - `lib/llm-service.ts` - Groq/OpenAI/Gemini calls, rate-limited.
 - `app/page.tsx` - Consumes the stream and renders progressively.aa
+---
+## Getting Started
 
-## Notes & future improvements
+Follow these steps to start contributing to **Exora**:
 
-- Add source badges (Exa/NewsAPI) to news cards for transparency.
-- Cache competitor discovery per domain to reduce LLM calls.
-- Persist partial results to localStorage during streaming for refresh resilience.
-- Optional: WebSocket transport for bi-directional interactions; SSE suffices for unidirectional streams.
-- SSE key-status echo event (optionally confirm accepted providers early).
-- Encrypted at-rest storage for keys using WebCrypto + user passphrase.
-- Provider usage counters & soft warnings before quota exhaustion.
+1. **Fork and clone the repository**:
+```bash
+git clone https://github.com/<your-username>/Exora-task>.git
+cd <repo-name>
+````
+
+2. **Install dependencies**:
+
+```bash
+npm install
+```
+
+3. **Find a genuine bug or enhancement**.
+   For valid issues, use a clear naming convention, e.g.:
+
+   * `[UI/UX] :feat` → for a UI/UX feature
+   * `[Backend] :fix` → for a backend bug
+   * `[Docs] :update` → for documentation improvements
+
+4. **Create a branch** from `development` (never `main`) before making changes.
+
+5. **Submit a Pull Request** following the guidelines below.
+
+---
+
+## Contributor Guidelines
+
+We welcome contributions from the community, including those joining through programs such as **Hector**, **Fetched**, or **Summer of Code**.
+Please follow the steps below to ensure smooth collaboration:
+
+### Issues & Bug Reporting
+
+* Before opening a new issue, **search existing issues** to avoid duplicates.
+* Use the **issue templates** provided:
+
+  * [] **Bug Report** – for errors, crashes, or unexpected behavior.
+  * [] **Feature Request** – for new ideas or enhancements.
+  * [] **Security Report** – for vulnerabilities (please report responsibly).
+* Add clear reproduction steps, expected vs. actual results, and screenshots/logs if possible.
+
+### Branch & Commit Practices
+
+* Always branch from `development` (never directly from `main`).
+* Use the following branch naming convention:
+
+  * `feat/<short-feature-name>` → for new features
+  * `fix/<short-bug-title>` → for bug fixes
+  * `docs/<update-area>` → for documentation changes
+* Keep commits **atomic** and meaningful. Example:
+
+  * ✅ `fix: resolve duplicate competitor domains`
+  * ✅ `feat: add contributor guidelines section`
+
+---
+
+## Running Tests
+
+Before submitting a PR, run tests locally:
+
+```bash
+npm run test
+npm run lint
+```
+---
+
+### Pull Requests
+
+* Ensure your PR title follows the format:
+
+  * `[Feature] Add <feature>` / `[Fix] Resolve <issue>`
+* Link the related issue (`Closes #123`) inside your PR description.
+* Follow the template and checklist to make reviews smoother.
+* PRs are merged into `development` first, then promoted to `main` after review & testing.
+
+## Notes & Future Improvements
+
+* Add source badges (Exa/NewsAPI) to news cards for transparency.
+* Cache competitor discovery per domain to reduce LLM calls.
+* Persist partial results to localStorage during streaming for refresh resilience.
+* Optional: WebSocket transport for bi-directional interactions; SSE suffices for unidirectional streams.
+* SSE key-status echo event (optionally confirm accepted providers early).
+* Encrypted at-rest storage for keys using WebCrypto + user passphrase.
+* Provider usage counters & soft warnings before quota exhaustion.
+
+##  Special Thanks
+
+Thanks to everyone contributing under open-source summer programs.
+Your work drives the progress of **Exora** 
+
+---
+
+### Contributor Wall
+
+We deeply appreciate every contributor. Your GitHub profile will be displayed in our contributor section below 👇
+
+[![](https://contrib.rocks/image?repo=AdityaP700/Exora-task)](https://github.com/AdityaP700/Exora-task/graphs/contributors)
+
+*Click the badge above to see all contributors.*
 
 ---
 
