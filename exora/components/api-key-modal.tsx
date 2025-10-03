@@ -50,11 +50,15 @@ export function ApiKeyModal() {
   };
 
   const runValidate = async (id: 'exa'|'gemini'|'openai'|'groq') => {
+    // Ensure the latest locally typed keys are in the store before validating
+    setKeys(localKeys);
     setTimeout(() => validateProvider(id), 50);
   };
 
   const runValidateAll = async () => {
     setBulkValidating(true);
+    // Ensure the latest locally typed keys are in the store before validating all
+    setKeys(localKeys);
     setTimeout(async () => {
       await validateAllProviders();
       setBulkValidating(false);

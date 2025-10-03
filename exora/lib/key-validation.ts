@@ -36,12 +36,22 @@ async function validateExa(key: string): Promise<ValidationResult> {
 
 async function validateOpenAI(key: string): Promise<ValidationResult> {
   try {
-    if (!key) return { provider: 'openai', status: 'invalid', message: 'Missing key' };
-    const resp = await fetch('https://api.openai.com/v1/models', {
-      headers: { Authorization: `Bearer ${key}` }
+    const trimmedKey = key?.trim();
+    if (!trimmedKey) return { provider: 'openai', status: 'invalid', message: 'Missing key' };
+    // Use internal server proxy to avoid CORS issues
+    const resp = await fetch('/api/openai/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: trimmedKey })
     });
-    if (resp.status === 401 || resp.status === 403) return { provider: 'openai', status: 'invalid', message: 'Unauthorized' };
-    if (!resp.ok) return { provider: 'openai', status: 'invalid', message: `HTTP ${resp.status}` };
+    if (!resp.ok) {
+      return { provider: 'openai', status: 'invalid', message: `Route HTTP ${resp.status}` };
+    }
+    const data: { valid: boolean; status: number; error?: string } = await resp.json();
+    if (!data.valid) {
+      const message = data.error === 'Unauthorized' ? 'Unauthorized' : (data.error || `HTTP ${data.status}`);
+      return { provider: 'openai', status: 'invalid', message };
+    }
     return { provider: 'openai', status: 'valid' };
   } catch (e: any) {
     return { provider: 'openai', status: 'invalid', message: e?.message || 'Network error' };
@@ -50,12 +60,22 @@ async function validateOpenAI(key: string): Promise<ValidationResult> {
 
 async function validateGroq(key: string): Promise<ValidationResult> {
   try {
-    if (!key) return { provider: 'groq', status: 'invalid', message: 'Missing key' };
-    const resp = await fetch('https://api.groq.com/openai/v1/models', {
-      headers: { Authorization: `Bearer ${key}` }
+    const trimmedKey = key?.trim();
+    if (!trimmedKey) return { provider: 'groq', status: 'invalid', message: 'Missing key' };
+    // Use internal server proxy to avoid CORS issues
+    const resp = await fetch('/api/groq/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: trimmedKey })
     });
-    if (resp.status === 401 || resp.status === 403) return { provider: 'groq', status: 'invalid', message: 'Unauthorized' };
-    if (!resp.ok) return { provider: 'groq', status: 'invalid', message: `HTTP ${resp.status}` };
+    if (!resp.ok) {
+      return { provider: 'groq', status: 'invalid', message: `Route HTTP ${resp.status}` };
+    }
+    const data: { valid: boolean; status: number; error?: string } = await resp.json();
+    if (!data.valid) {
+      const message = data.error === 'Unauthorized' ? 'Unauthorized' : (data.error || `HTTP ${data.status}`);
+      return { provider: 'groq', status: 'invalid', message };
+    }
     return { provider: 'groq', status: 'valid' };
   } catch (e: any) {
     return { provider: 'groq', status: 'invalid', message: e?.message || 'Network error' };
@@ -64,10 +84,22 @@ async function validateGroq(key: string): Promise<ValidationResult> {
 
 async function validateGemini(key: string): Promise<ValidationResult> {
   try {
-    if (!key) return { provider: 'gemini', status: 'invalid', message: 'Missing key' };
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${key}`);
-    if (resp.status === 400 || resp.status === 401 || resp.status === 403) return { provider: 'gemini', status: 'invalid', message: 'Unauthorized' };
-    if (!resp.ok) return { provider: 'gemini', status: 'invalid', message: `HTTP ${resp.status}` };
+    const trimmedKey = key?.trim();
+    if (!trimmedKey) return { provider: 'gemini', status: 'invalid', message: 'Missing key' };
+    // Use internal server proxy to avoid CORS issues
+    const resp = await fetch('/api/gemini/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: trimmedKey })
+    });
+    if (!resp.ok) {
+      return { provider: 'gemini', status: 'invalid', message: `Route HTTP ${resp.status}` };
+    }
+    const data: { valid: boolean; status: number; error?: string } = await resp.json();
+    if (!data.valid) {
+      const message = data.error === 'Unauthorized' ? 'Unauthorized' : (data.error || `HTTP ${data.status}`);
+      return { provider: 'gemini', status: 'invalid', message };
+    }
     return { provider: 'gemini', status: 'valid' };
   } catch (e: any) {
     return { provider: 'gemini', status: 'invalid', message: e?.message || 'Network error' };
