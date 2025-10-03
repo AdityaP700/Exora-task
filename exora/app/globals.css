@@ -224,3 +224,5 @@
   .scrollbar-amber::-webkit-scrollbar-thumb { background:#F59E0B33; border-radius:4px; }
   .scrollbar-amber::-webkit-scrollbar-thumb:hover { background:#F59E0B66; }
 }
+
+@source inline("flex-[1.15]", "min-w-[380px]");
