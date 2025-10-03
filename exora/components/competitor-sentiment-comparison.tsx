@@ -21,7 +21,7 @@ export function CompetitorSentimentComparison({ data, limit = 6 }: Props) {
   }, [rows])
 
   return (
-    <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl p-6 border border-white/10 relative">
+    <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl p-6 border border-white/10 relative flex flex-col h-full">
       {rows.length === 0 && (
         <div className="absolute inset-0 rounded-xl overflow-hidden">
           <div className="animate-pulse w-full h-full bg-gradient-to-b from-slate-800/40 to-slate-900/60" />
@@ -37,7 +37,7 @@ export function CompetitorSentimentComparison({ data, limit = 6 }: Props) {
           <ToggleGroupItem value="stacked">Stacked</ToggleGroupItem>
         </ToggleGroup>
       </div>
-      <div className="h-72">
+      <div className="h-72 flex-shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 8, right: 8, left: -4, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />

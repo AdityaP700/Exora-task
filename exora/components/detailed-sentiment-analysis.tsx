@@ -17,7 +17,7 @@ export function DetailedSentimentAnalysis({ row, loading }: DetailedSentimentAna
   const breakdown = enhanced?.breakdown
 
   return (
-    <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl p-6 border border-white/10 transition-colors relative">
+    <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl p-6 border border-white/10 transition-colors relative flex flex-col h-full">
       {loading && !hist.length && (
         <div className="absolute inset-0 rounded-xl overflow-hidden">
           <div className="animate-pulse w-full h-full bg-gradient-to-b from-slate-800/40 to-slate-900/60" />
@@ -42,7 +42,7 @@ export function DetailedSentimentAnalysis({ row, loading }: DetailedSentimentAna
           </div>
         </div>
       </div>
-      <div className="h-64">
+      <div className="h-64 flex-shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 8, right: 12, left: -4, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />

@@ -643,23 +643,19 @@ export default function ExoraPage() {
                       </div>
 
                       {/* Lower Section: detailed + comparison + market + assistant */}
-                      <div className="flex flex-col xl:flex-row gap-6 items-stretch">
-                        <div className="w-full xl:w-[55%] flex min-w-0">
-                          <DetailedSentimentAnalysis
-                            row={benchmark[0] as any}
-                            loading={
-                              isStreaming &&
-                              !benchmark[0]?.sentimentHistoricalData
-                            }
+                      <div className="grid grid-cols-1 xl:grid-cols-[55fr_45fr] gap-6">
+                        <DetailedSentimentAnalysis
+                          row={benchmark[0] as any}
+                          loading={
+                            isStreaming &&
+                            !benchmark[0]?.sentimentHistoricalData
+                          }
+                        />
+                        {analysisData && (
+                          <CompetitorSentimentComparison
+                            data={analysisData} 
                           />
-                        </div>
-                        <div className="w-full xl:w-[45%] flex min-w-0">
-                          {analysisData && (
-                            <CompetitorSentimentComparison
-                              data={analysisData} 
-                            />
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
                   )}
