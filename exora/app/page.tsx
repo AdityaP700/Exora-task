@@ -622,14 +622,14 @@ export default function ExoraPage() {
                   {activeView === "analysis" && (
                     <div className="space-y-6">
                       {/* Upper Section: primary + top competitors */}
-                      <div className="flex flex-col lg:flex-row gap-6">
-                        <div className={`flex-[1.15] min-w-[380px]`}>
+                      <div className="flex flex-col gap-6 lg:flex-row lg:items-stretch">
+                        <div className="w-full lg:w-[48%] xl:w-[40%] min-w-0">
                         <PrimarySentimentCard
                           row={benchmark[0] as any}
                           loading={isStreaming && !benchmark[0]}
                         />
                         </div>
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0">
                           {benchmark.slice(1, 4).map((row, i) => (
                             <CompetitorSentimentCard
                               key={row.domain + i}
@@ -643,8 +643,8 @@ export default function ExoraPage() {
                       </div>
 
                       {/* Lower Section: detailed + comparison + market + assistant */}
-                      <div className="flex gap-5 items-stretch">
-                        <div className="basis-[55%] flex">
+                      <div className="flex flex-col xl:flex-row gap-6 items-stretch">
+                        <div className="w-full xl:w-[55%] flex min-w-0">
                           <DetailedSentimentAnalysis
                             row={benchmark[0] as any}
                             loading={
@@ -653,7 +653,7 @@ export default function ExoraPage() {
                             }
                           />
                         </div>
-                        <div className="basis-[45%] flex">
+                        <div className="w-full xl:w-[45%] flex min-w-0">
                           {analysisData && (
                             <CompetitorSentimentComparison
                               data={analysisData} 
@@ -665,8 +665,8 @@ export default function ExoraPage() {
                   )}
 
                   {activeView === "overview" && analysisData && (
-                    <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_2.7fr] gap-8 max-w-[1600px] mx-auto">
-                      <div className="xl:sticky top-28 h-fit">
+                    <div className="grid grid-cols-1 2xl:grid-cols-[1.1fr_2fr] gap-8 max-w-screen-2xl mx-auto">
+                      <div className="2xl:sticky 2xl:top-28 h-fit min-w-0 order-2 2xl:order-1">
                         <CompanyOverviewCard
                           profile={analysisData.companyProfile}
                           founders={analysisData.founderInfo}
@@ -675,7 +675,7 @@ export default function ExoraPage() {
                           }
                         />
                       </div>
-                      <div className="flex flex-col gap-8">
+                      <div className="flex flex-col gap-8 min-w-0 order-1 2xl:order-2">
                         <div>
                         <CompanyNewsGrid items={analysisData.newsFeed} />
                         </div>

@@ -22,7 +22,7 @@ export function CompetitorSentimentCard({ row, loading }: CompetitorSentimentCar
   return (
     <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl p-5 border border-white/10 shadow flex flex-col transition-all duration-300 hover:border-cyan-400/20">
       <div className="flex items-start justify-between mb-2">
-        <h4 className="text-sm font-semibold text-white truncate max-w-[140px]">{row?.domain || '—'}</h4>
+  <h4 className="text-sm font-semibold text-white truncate max-w-full">{row?.domain || '—'}</h4>
         {loading && <span className="text-[10px] text-slate-500">…</span>}
       </div>
       <div className="h-20">

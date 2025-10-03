@@ -50,14 +50,14 @@ export function Navbar() {
   const { openModal, exaApiKey } = useApiKeyStore();
 
   return (
-    <header className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4">
+  <header className="fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-2 sm:px-4">
       <motion.div
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 70, damping: 20 }}
-        className="flex items-center justify-between p-2 rounded-full bg-slate-900/50 backdrop-blur-lg border border-slate-700/50 shadow-lg"
+        className="flex flex-wrap gap-2 items-center justify-between p-2 rounded-2xl bg-slate-900/60 backdrop-blur-lg border border-slate-700/50 shadow-lg"
       >
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-1 flex-wrap">
           {navItems.map((item) => {
             if (item.name === 'Search') {
               return (
@@ -85,7 +85,7 @@ export function Navbar() {
             )
           })}
         </nav>
-        <div className="flex items-center gap-2">
+  <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => openModal()}

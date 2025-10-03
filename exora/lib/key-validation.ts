@@ -13,16 +13,21 @@ export interface ValidationResult {
 async function validateExa(key: string): Promise<ValidationResult> {
   try {
     if (!key) return { provider: 'exa', status: 'invalid', message: 'Missing key' };
-    const resp = await fetch('https://api.exa.ai/search', {
+    // Use internal server proxy to avoid CORS and keep key usage server-side.
+    const resp = await fetch('/api/exa/validate', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-      },
-      body: JSON.stringify({ query: 'test', numResults: 1 })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key })
     });
-    if (resp.status === 401 || resp.status === 403) return { provider: 'exa', status: 'invalid', message: 'Unauthorized' };
-    if (!resp.ok) return { provider: 'exa', status: 'invalid', message: `HTTP ${resp.status}` };
+    if (!resp.ok) {
+      // Non-200 from route itself (likely 400/500) treat as invalid.
+      return { provider: 'exa', status: 'invalid', message: `Route HTTP ${resp.status}` };
+    }
+    const data: { valid: boolean; status: number; error?: string } = await resp.json();
+    if (!data.valid) {
+      const message = data.error === 'Unauthorized' ? 'Unauthorized' : (data.error || `HTTP ${data.status}`);
+      return { provider: 'exa', status: 'invalid', message };
+    }
     return { provider: 'exa', status: 'valid' };
   } catch (e: any) {
     return { provider: 'exa', status: 'invalid', message: e?.message || 'Network error' };

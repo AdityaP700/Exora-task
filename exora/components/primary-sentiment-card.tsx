@@ -34,7 +34,7 @@ export function PrimarySentimentCard({ row, loading }: PrimarySentimentCardProps
     <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl p-6 border border-white/10 shadow-lg flex-1 transition-all duration-300 ease-in-out hover:border-cyan-400/20">
       <div className="flex justify-between items-start mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-white truncate max-w-[240px]">{row?.domain || '—'}</h3>
+          <h3 className="text-lg font-semibold text-white truncate max-w-full">{row?.domain || '—'}</h3>
           <p className="text-xs text-slate-400">Exora Signals</p>
         </div>
         <div className="flex flex-col items-end gap-1">

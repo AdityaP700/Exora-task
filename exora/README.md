@@ -83,6 +83,17 @@ Client encodes present keys as base64url JSON: `{ exa, groq, gemini, openai }` �
 - Zero server storage of secrets (lives only in memory/client state)
 - Flexible multi‑provider experimentation
 
+### Key Validation & CORS
+Previously Exa key validation happened directly from the browser which could trigger CORS blocks (not all Exa endpoints send permissive CORS headers, and some privacy / shield modes in browsers are stricter). Validation now proxies through a lightweight server route: `POST /api/exa/validate` → performs a minimal 1‑result test query server‑side and returns `{ valid, status, error? }`. The client never calls Exa directly for validation, eliminating:
+1. CORS inconsistencies between Chrome/Brave (esp. Incognito).
+2. Exposure of validation traffic patterns to the user’s network tools.
+3. Potential future tightening of Exa browser access policies.
+
+If you copy this pattern for other providers, prefer server validation when:
+- The provider does not guarantee stable CORS headers.
+- You need to normalize heterogeneous error formats.
+- You want to throttle/aggregate validations (e.g. batch endpoint).
+
 ---
 ## 📊 Rate Limit & Call Strategy
 | Provider | Calls per Search (Approx) | Notes |
@@ -147,5 +158,15 @@ Repository: https://github.com/AdityaP700/Exora-task
 MIT (add LICENSE file if not present).
 
 ---
-## 📬 Contact
+## � Responsive Design
+The UI now adapts across breakpoints:
+- Sentiment header section switches from two-column flex to stacked on small screens.
+- Competitor cards grid: `1 -> 2 -> 3` columns (`sm`, `xl`).
+- Overview + news layout reorders so news appears first on narrow viewports.
+- Filter pill row in competitor news becomes horizontally scrollable to prevent wrapping overflow.
+- Navbar wraps actions on very small widths.
+Consider further enhancement with a future compact mode (reduced padding + condensed typography) if targeting very narrow embedded iframes.
+
+---
+## �📬 Contact
 For questions or collaboration: open an issue or reach out via GitHub profile.

@@ -50,8 +50,8 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
 
   return (
     <section className="glass rounded-2xl p-6 backdrop-blur-md bg-gradient-to-br from-slate-900/60 to-slate-800/40 border border-white/10 shadow-xl space-y-8">
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-4 min-w-0">
+      <header className="flex flex-col sm:flex-row items-start justify-between gap-4">
+        <div className="flex items-start gap-4 min-w-0 flex-1">
           <div className="w-14 h-14 rounded-xl bg-white/5 ring-1 ring-white/10 overflow-hidden flex items-center justify-center flex-shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={logo} alt={profile.name} className="w-full h-full object-contain p-1" onError={(e)=>{ (e.currentTarget as HTMLImageElement).style.display='none' }} />
@@ -68,7 +68,7 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
             </a>
           </div>
         {(profile.profileDataQuality || activeProviders>=0) && (
-          <div className="flex flex-col items-end gap-1 min-w-[120px]">
+          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-1 min-w-0">
             <div className="flex items-center gap-2">
               {profile.profileDataQuality && (
                 <span
@@ -110,7 +110,7 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
         <p className="text-sm text-slate-300 leading-relaxed">{brief}</p>
       )}
 
-      <div className="space-y-5">
+  <div className="space-y-5">
         <div>
           <div className="flex flex-wrap gap-2">
             {socialLinks.map((link, i) => (
@@ -146,7 +146,7 @@ export function CompanyOverviewCard({ profile, founders, sentimentScore }: Props
         <div>
           <h3 className="text-[11px] tracking-wider text-slate-500 mb-2">Founder</h3>
           {prioritizedFounders && prioritizedFounders.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {prioritizedFounders.map((f,i)=>{
                 const social = f.linkedin || f.twitter
                 const Icon = f.linkedin ? Linkedin : (f.twitter ? Twitter : null)

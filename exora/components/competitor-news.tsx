@@ -25,10 +25,10 @@ export function CompetitorNews({ competitors, isLoading }: Props) {
           <span className="text-[10px] px-2 py-1 rounded bg-slate-700/40 text-slate-400 border border-white/10 tracking-wide">Loading…</span>
         )}
       </header>
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-nowrap overflow-x-auto gap-2 mb-4 pb-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-slate-700/40">
         <button onClick={()=>setActive('All')} className={`px-3 py-1.5 rounded-full text-xs border transition backdrop-blur-sm ${active==='All'? 'bg-white/10 border-white/30 text-slate-200':'border-white/10 text-slate-500 hover:text-slate-300 hover:border-white/20'}`}>All</button>
         {domains.map(d=>(
-          <button key={d} onClick={()=>setActive(d)} className={`px-3 py-1.5 rounded-full text-xs border truncate max-w-[120px] transition backdrop-blur-sm ${active===d? 'bg-white/10 border-white/30 text-slate-200':'border-white/10 text-slate-500 hover:text-slate-300 hover:border-white/20'}`}>{d}</button>
+          <button key={d} onClick={()=>setActive(d)} className={`px-3 py-1.5 rounded-full text-xs border truncate max-w-[140px] transition backdrop-blur-sm ${active===d? 'bg-white/10 border-white/30 text-slate-200':'border-white/10 text-slate-500 hover:text-slate-300 hover:border-white/20'}`}>{d}</button>
         ))}
       </div>
       <div className="flex-1 overflow-y-auto pr-1 space-y-3">
