@@ -3,7 +3,8 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Search, Github, Star } from "lucide-react";
+import { Search, Github, Star, KeyRound } from "lucide-react";
+import { useApiKeyStore } from '@/lib/store';
 import { HoverButton } from "@/components/ui/hover-button";
 
 export function Navbar() {
@@ -46,6 +47,7 @@ export function Navbar() {
       external: true,
     },
   ];
+  const { openModal, exaApiKey } = useApiKeyStore();
 
   return (
     <header className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4">
@@ -83,7 +85,17 @@ export function Navbar() {
             )
           })}
         </nav>
-        <a
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => openModal()}
+            className="relative flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-full bg-slate-800/60 hover:bg-slate-700/60 border border-slate-600/40 text-slate-200 transition-colors"
+          >
+            <KeyRound className="w-4 h-4" />
+            <span>{exaApiKey ? 'API Keys' : 'Add Keys'}</span>
+            {!exaApiKey && <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />}
+          </button>
+          <a
           href="https://github.com/AdityaP700/Exora-task"
           target="_blank"
           rel="noopener noreferrer"
@@ -95,6 +107,7 @@ export function Navbar() {
             {starLoading ? '…' : (stars ?? '—')}
           </span>
         </a>
+        </div>
       </motion.div>
     </header>
   );
