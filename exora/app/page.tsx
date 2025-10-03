@@ -623,7 +623,7 @@ export default function ExoraPage() {
                     <div className="space-y-6">
                       {/* Upper Section: primary + top competitors */}
                       <div className="flex flex-col lg:flex-row gap-6">
-                        <div className="flex-[1.15] min-w-[380px]">
+                        <div className={`flex-[1.15] min-w-[380px]`}>
                         <PrimarySentimentCard
                           row={benchmark[0] as any}
                           loading={isStreaming && !benchmark[0]}

@@ -6,6 +6,14 @@ const config: Config = {
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+  {
+  raw:
+`file-[1.15]
+min-w-[380px]
+text-red-500
+bg-blue-500
+`,
+  }
   ],
   theme: {
     container: {
