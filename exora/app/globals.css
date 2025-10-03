@@ -225,4 +225,4 @@
   .scrollbar-amber::-webkit-scrollbar-thumb:hover { background:#F59E0B66; }
 }
 
-@source inline("flex-[1.15]", "min-w-[380px]");
+@source inline("flex-[1.15]", "min-w-[380px],basis-[55%],basis-[45%]");
