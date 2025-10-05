@@ -140,28 +140,96 @@ export async function GET(req: Request) {
         send('profile', { profile: snapshotProfile })
 
         // Stage 2: Founders + Socials (parallel, but limited)
-        const foundersPrompt = `For the company operating at ${domain}${canonical ? ` (canonical name: ${canonical.canonicalName}; aliases: ${canonical.aliases.join(', ')})` : ''}, return ONLY JSON array of people objects with keys: name, roleGuess (Founder/Co-Founder/CEO/CTO/Director/Other), linkedin (url or null), wikipedia (url or null), confidence (0-1). Ensure the current CEO is included; if no CTO publicly known include a senior technology leader (e.g., CTO-equivalent) or a Director if relevant. Use public knowledge up to 2024.`
+        // Strengthened founders prompt with strict JSON-only rules and ambiguity guard
+        const foundersPrompt = `Task: Identify founders for the exact company operating at domain: ${domain}${canonical ? ` (canonical name: ${canonical.canonicalName})` : ''}${canonical?.aliases?.length ? `; known aliases: ${canonical.aliases.join(', ')}` : ''}.
+
+Rules:
+- ONLY include founders or co-founders of this exact company (match the canonical brand, not similarly named orgs or different TLDs).
+- If uncertain or ambiguous, return an empty array [].
+- Return ONLY a JSON array. No prose.
+
+Output JSON schema (array of objects):
+[{ "name": string, "linkedin"?: string|null, "twitter"?: string|null, "role"?: string|null, "confidence"?: number }]
+`
         const profilePrompt = `Profile for ${domain}${canonical ? ` (canonical name: ${canonical.canonicalName})` : ''}. Return ONLY JSON with name, description, ipoStatus, socials{linkedin,twitter,facebook}`
-  const foundersPromise = safeGenerateJson(foundersPrompt, llmProviders).catch(() => [])
+
+  const foundersPromise = (async () => {
+    try {
+      // 1) Web search for founder info using Exa (actual web sources)
+      const { searchFounderInfo } = await import('@/lib/exa-service');
+      const founderSearchResults = await searchFounderInfo(
+        domain,
+        canonical?.canonicalName || null,
+        exaKey
+      );
+
+      // 2) Extract founder names from web content using LLM
+      if (founderSearchResults.results.length > 0) {
+        const webContent = founderSearchResults.results
+          .map((r, i) => `Source ${i + 1} (${r.url}):\n${r.text || r.title || ''}`)
+          .join('\n\n');
+
+        const extractPrompt = `Based on these web sources about ${canonical?.canonicalName || domain}, extract ONLY the founders/co-founders and CEO.
+
+Web Sources:
+${webContent}
+
+Rules:
+- Extract ONLY actual founders, co-founders, and current CEO
+- Match names to the exact company: ${canonical?.canonicalName || domain}
+- Include their role (Founder, Co-founder, CEO, etc.)
+- If you find LinkedIn or Twitter URLs in the text, include them
+- Return empty array if no clear founder information found
+
+Return ONLY valid JSON array:
+[{ "name": string, "role": string, "linkedin"?: string, "twitter"?: string }]`;
+
+        const extracted = await safeGenerateJson<any[]>(extractPrompt, llmProviders).catch(() => []);
+
+        if (Array.isArray(extracted) && extracted.length > 0) {
+          const cleaned = extracted
+            .map((p: any) => ({
+              name: typeof p?.name === 'string' ? p.name.trim() : '',
+              linkedin: typeof p?.linkedin === 'string' ? p.linkedin : undefined,
+              twitter: typeof p?.twitter === 'string' ? p.twitter : undefined,
+              role: typeof p?.role === 'string' ? p.role : undefined,
+            }))
+            .filter(p => p.name && p.name.length < 120 && p.name.length > 2);
+
+          if (cleaned.length > 0) {
+            return cleaned;
+          }
+        }
+      }
+
+      // 3) Fallback: Try direct LLM if web search found nothing
+      console.log(`⚠️ Web search found no founder info for ${domain}, falling back to LLM`);
+      const fallbackPrompt = `Who are the founders and current CEO of ${canonical?.canonicalName || domain}? Return ONLY JSON array: [{"name": string, "role": string}]`;
+      const fallback = await safeGenerateJson<any[]>(fallbackPrompt, llmProviders).catch(() => []);
+
+      if (Array.isArray(fallback) && fallback.length > 0) {
+        return fallback
+          .map((p: any) => ({
+            name: typeof p?.name === 'string' ? p.name.trim() : '',
+            role: typeof p?.role === 'string' ? p.role : 'Founder',
+          }))
+          .filter(p => p.name && p.name.length < 120)
+          .slice(0, 5); // Limit to top 5
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Error fetching founder info:', error);
+      return [];
+    }
+  })()
+
   const profilePromise = safeGenerateJson(profilePrompt, llmProviders).catch(() => ({ name: domain.split('.')[0], description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} }))
 
-  const [rawLeaders, profile] = await Promise.all([foundersPromise, profilePromise])
-  // Normalize & split founders vs current execs
-  let leaders = Array.isArray(rawLeaders) ? rawLeaders : []
-  // guarantee CEO presence with fallback heuristic if missing
-  const hasCEO = leaders.some((p: any) => /ceo/i.test(p.roleGuess || ''))
-  if (!hasCEO && canonical) {
-    // attempt a lightweight CEO fetch
-    try {
-      const ceoText = await safeGenerateText(`Who is the current CEO of ${canonical.canonicalName}? Return ONLY the name.`, llmProviders)
-      const name = ceoText.split(/\n|,|-/)[0].trim().slice(0,120)
-      if (name && !leaders.some((l: any)=> l.name?.toLowerCase() === name.toLowerCase())) {
-        leaders.push({ name, roleGuess: 'CEO', linkedin: null, wikipedia: null, confidence: 0.55 })
-      }
-    } catch {}
-  }
-  const founders = leaders.filter((p: any) => /founder/i.test(p.roleGuess || ''))
-  const executives = leaders.filter((p: any) => /(ceo|cto|director)/i.test(p.roleGuess || ''))
+  const [verifiedFounders, profile] = await Promise.all([foundersPromise, profilePromise])
+  // Split founders vs execs for emission
+  const founders = verifiedFounders.filter((p: any) => /founder/i.test(p.role || ''))
+  const executives = verifiedFounders.filter((p: any) => /(ceo|cto|director)/i.test(p.role || ''))
   send('founders', { founders })
   send('leadership', { executives, founders })
         send('socials', { socials: profile.socials || {} })
