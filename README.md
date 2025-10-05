@@ -413,9 +413,10 @@ Your work drives the progress of **Exora**
 
 We deeply appreciate every contributor. Your GitHub profile will be displayed in our contributor section below 👇
 
-[![](https://contrib.rocks/image?repo=AdityaP700/Exora-task)](https://github.com/AdityaP700/Exora-task/graphs/contributors)
+<a href="https://github.com/AdityaP700/Exora-task/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=AdityaP700/Exora-task" />
+</a>
 
-*Click the badge above to see all contributors.*
 
 ---
 
