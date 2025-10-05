@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { sharedLimiter } from '@/lib/limiter'
 import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-service'
 import { fetchExaData, scoreNewsItem, exaAdHocSearch } from '@/lib/exa-service'
+import { TRUSTED_SOURCES as TRUSTED_SOURCES_SET, isTrustedSource } from '@/lib/constants'
 import { getCanonicalInfo } from '@/lib/canonical'
 import { getOrGenerateProfileSnapshot } from '@/lib/profile-snapshot'
 import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData, generateEnhancedSentimentAnalysis } from '@/lib/analysis-service'
@@ -171,7 +172,7 @@ export async function GET(req: Request) {
   const competitors = await discoverCompetitors(domain, llmProviders)
         send('competitors', { competitors })
         // Re-score + disambiguation filter: keep only items referencing aliases unless from trusted source
-        const TRUSTED_SOURCES = ['techcrunch.com','wsj.com','bloomberg.com','forbes.com','businessinsider.com','reuters.com','theverge.com','nytimes.com','ft.com','wired.com','cnbc.com','cnn.com','bbc.com']
+        const TRUSTED_SOURCES = Array.from(TRUSTED_SOURCES_SET)
         const MIN_MENTIONS = 8
         if (canonical && mainMentions?.results?.length) {
           const original = [...mainMentions.results]
@@ -214,16 +215,14 @@ export async function GET(req: Request) {
           } catch {}
         }
         // Derive company news similarly to competitor approach (rank & slice)
-        const trustedSources = new Set<string>([
-          'techcrunch.com','wsj.com','bloomberg.com','forbes.com','businessinsider.com','reuters.com','theverge.com','nytimes.com','ft.com','wired.com','cnbc.com','cnn.com','bbc.com'
-        ])
+        const trustedSources = new Set<string>(Array.from(TRUSTED_SOURCES_SET))
         interface MainNews { headline: string; url: string; source: string; publishedDate: string; credibility?: number; _metrics?: any }
         let mainTopNews: MainNews[] = (mainMentions.results || []).map((m: any): MainNews => ({
           headline: m.title,
           url: m.url,
           source: m.domain,
           publishedDate: normalizePublishedDate(m.publishedDate || new Date().toISOString()),
-          credibility: trustedSources.has((m.domain || '').toLowerCase()) ? 2 : 0
+          credibility: isTrustedSource(m.domain) ? 2 : 0
         }))
           .map((n: MainNews) => ({ ...n, _metrics: scoreNewsItem({ title: n.headline, url: n.url, publishedDate: n.publishedDate, credibility: n.credibility, domain: n.source }) }))
           .sort((a: MainNews, b: MainNews)=> (b._metrics.score - a._metrics.score) || (new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()))
@@ -248,9 +247,7 @@ export async function GET(req: Request) {
         ))
 
         // Flatten, take latest 4 across all competitors
-        const trustedSourcesComp = new Set([
-          'techcrunch.com','wsj.com','bloomberg.com','forbes.com','businessinsider.com','reuters.com','theverge.com','nytimes.com','ft.com','wired.com','cnbc.com','cnn.com','bbc.com'
-        ])
+        const trustedSourcesComp = new Set(Array.from(TRUSTED_SOURCES_SET))
         const competitorNewsAllRaw = compResults.flatMap((r, idx) => {
           const d = competitors[idx]
           return (r.results || []).map((m: any) => ({
@@ -271,7 +268,7 @@ export async function GET(req: Request) {
         const refined: any[] = []
         Object.entries(grouped).forEach(([cDomain, items]) => {
           const ranked = items.map(n => {
-            const credibility = trustedSourcesComp.has((n.source || '').toLowerCase()) ? 2 : 0
+            const credibility = isTrustedSource(n.source) ? 2 : 0
             const metrics = scoreNewsItem({ title: n.headline, url: n.url, publishedDate: n.publishedDate, credibility, domain: n.source })
             return { ...n, credibility, _metrics: metrics }
           }).sort((a,b)=> (b._metrics.score - a._metrics.score) || (new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()))
