@@ -1,6 +1,7 @@
 // lib/exa-service.ts
 import { sharedLimiter } from '@/lib/limiter';
 import { normalizePublishedDate } from '@/lib/utils';
+import { TRUSTED_SOURCES, isTrustedSource } from '@/lib/constants';
 const EXA_API_URL = 'https://api.exa.ai/search';
 
 // 🔧 FIXED: Add delay function for rate limiting
@@ -75,7 +76,7 @@ export async function fetchExaData(
         numResults: type === 'mentions' ? (options?.numResults ?? 25) : 8,
         startPublishedDate: getPastDate(type === 'mentions' ? 14 : 90),
         includeDomains: type === 'signals'
-          ? ['techcrunch.com', 'wsj.com', 'bloomberg.com', 'forbes.com', 'businessinsider.com']
+          ? Array.from(TRUSTED_SOURCES)
           : undefined,
       });
       if (result.results) {
@@ -99,10 +100,7 @@ export async function fetchExaData(
   if (type === 'mentions') {
     const target = domain.toLowerCase();
     const brand = companyName.toLowerCase();
-    const trustedNews = new Set([
-      'techcrunch.com', 'wsj.com', 'bloomberg.com', 'forbes.com', 'businessinsider.com', 'reuters.com',
-      'theverge.com', 'nytimes.com', 'ft.com', 'wired.com', 'cnbc.com', 'cnn.com', 'bbc.com'
-    ]);
+    const trustedNews = TRUSTED_SOURCES;
 
     const getHost = (u: string): string | null => {
       try { return new URL(u).hostname.toLowerCase(); } catch { return null; }
@@ -122,7 +120,9 @@ export async function fetchExaData(
     });
   }
 
-  console.log(`📊 Total ${type} for ${domain}: ${allResults.length} raw → ${uniqueResults.length} unique → ${filtered.length} filtered`);
+  if (process.env.VERBOSE_LOGS === 'true') {
+    console.log(`📊 Total ${type} for ${domain}: ${allResults.length} raw → ${uniqueResults.length} unique → ${filtered.length} filtered`);
+  }
   return { results: filtered };
 }
 
@@ -140,10 +140,14 @@ export async function fetchMentions(domain: string, apiKey: string): Promise<any
   
   try {
     const result = await exaSearch(apiKey, body);
-    console.log(`📊 Mentions found for ${domain}: ${result.results?.length || 0}`);
+    if (process.env.VERBOSE_LOGS === 'true') {
+      console.log(`📊 Mentions found for ${domain}: ${result.results?.length || 0}`);
+    }
     return result;
   } catch (error) {
-    console.warn(`Failed to fetch mentions for ${domain}:`, error);
+    if (process.env.VERBOSE_LOGS === 'true') {
+      console.warn(`Failed to fetch mentions for ${domain}:`, error);
+    }
     return { results: [] };
   }
 }
@@ -197,15 +201,18 @@ export async function fetchSignals(domain: string, apiKey: string): Promise<any>
     .map(r => ({ ...r, publishedDate: normalizePublishedDate(r.publishedDate || new Date().toISOString()) }))
     .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
   
-  console.log(`🎯 Total signals for ${domain}: ${allResults.length} raw → ${uniqueResults.length} unique`);
+  if (process.env.VERBOSE_LOGS === 'true') {
+    console.log(`🎯 Total signals for ${domain}: ${allResults.length} raw → ${uniqueResults.length} unique`);
+  }
   return { results: uniqueResults.slice(0, 15) };
 }
 export async function fetchHistoricalData(domain: string, apiKey: string): Promise<{ date: string; mentions: number }[]> {
   const companyName = domain.split('.')[0];
   const datePoints: { date: string; mentions: number }[] = [];
   
-  // Create an array of the last 30 days
-  const dates = Array.from({ length: 30 }, (_, i) => {
+  const days = Math.max(1, Math.min(90, parseInt(process.env.HISTORICAL_DAYS || '30')));
+  // Create an array of the last N days
+  const dates = Array.from({ length: days }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - i);
     return d.toISOString().split('T')[0];
@@ -228,7 +235,9 @@ export async function fetchHistoricalData(domain: string, apiKey: string): Promi
       datePoints.push({ date, mentions: result.results?.length || 0 });
       await new Promise(resolve => setTimeout(resolve, 250)); // Stay safely under rate limit
     } catch (error) {
-      console.warn(`Could not fetch historical data for ${domain} on ${date}`, error);
+      if (process.env.VERBOSE_LOGS === 'true') {
+        console.warn(`Could not fetch historical data for ${domain} on ${date}`, error);
+      }
       datePoints.push({ date, mentions: 0 }); // Push 0 on error to keep the timeline consistent
     }
   }

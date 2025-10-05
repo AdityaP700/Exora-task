@@ -5,6 +5,7 @@ import { safeGenerateText, safeGenerateJson, ProviderConfig } from '@/lib/llm-se
 import { fetchExaData, fetchHistoricalData } from '@/lib/exa-service';
 import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData, generateEnhancedSentimentAnalysis } from '@/lib/analysis-service';
 import { normalizePublishedDate } from '@/lib/utils';
+import { TRUSTED_SOURCES as TRUSTED_SOURCES_SET, isTrustedSource } from '@/lib/constants';
 import { BriefingResponse, EventType, CompanyProfile, FounderInfo } from '@/lib/types';
 
 // --- HELPER FUNCTIONS ---
@@ -155,9 +156,7 @@ async function fetchNewsApiFallback(domain: string, apiKey?: string) {
     const json = await res.json()
     const articles = (json.articles || []) as any[]
     // Filter homonyms: keep exact-domain links and trusted news; drop other brand TLDs
-    const trustedNews = new Set([
-      'techcrunch.com', 'wsj.com', 'bloomberg.com', 'forbes.com', 'businessinsider.com', 'reuters.com', 'theverge.com', 'nytimes.com', 'ft.com', 'wired.com', 'cnbc.com', 'cnn.com', 'bbc.com'
-    ])
+    const trustedNews = TRUSTED_SOURCES_SET
     const getHost = (u: string): string | null => { try { return new URL(u).hostname.toLowerCase() } catch { return null } }
     const target = domain.toLowerCase()
     const brand = companyName.toLowerCase()
@@ -451,9 +450,7 @@ Rules:
     });
 
     // Refine competitor news: keep 2–4 credible/trending items per competitor
-    const trustedSources = new Set([
-      'techcrunch.com', 'wsj.com', 'bloomberg.com', 'forbes.com', 'businessinsider.com', 'reuters.com', 'theverge.com', 'nytimes.com', 'ft.com', 'wired.com', 'cnbc.com', 'cnn.com', 'bbc.com'
-    ])
+    const trustedSources = new Set(Array.from(TRUSTED_SOURCES_SET))
 
     benchmarkMatrix.forEach((company: any, i) => {
       if (i === 0) return // skip primary here
@@ -461,7 +458,7 @@ Rules:
         .filter((n: any) => n.headline && n.headline !== 'N/A')
         .map((n: any) => ({
           ...n,
-          credibility: trustedSources.has((n.source || '').toLowerCase()) ? 1 : 0,
+          credibility: isTrustedSource(n.source) ? 1 : 0,
           freshness: Date.now() - new Date(n.publishedDate).getTime()
         }))
         .sort((a: any, b: any) => {

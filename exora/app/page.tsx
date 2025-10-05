@@ -155,7 +155,7 @@ export default function ExoraPage() {
     setOverview("");
     setProfile(null);
     setFounders([]);
-    setCompetitors(["exxonmobil.com", "shell.com", "bp.com"]);
+    setCompetitors([]);
     setCompanyNews([]);
     setCompetitorNews([]);
     setBenchmark([]);
@@ -206,12 +206,16 @@ export default function ExoraPage() {
         if (geminiApiKey) keyPayload.gemini = geminiApiKey.trim();
         if (openAiApiKey) keyPayload.openai = openAiApiKey.trim();
         const b64 = Object.keys(keyPayload).length
-          ? encodeURIComponent(
-              btoa(unescape(encodeURIComponent(JSON.stringify(keyPayload))))
-                .replace(/=/g,'')
-                .replace(/\+/g,'-')
-                .replace(/\//g,'_')
-            )
+          ? (() => {
+              const json = JSON.stringify(keyPayload);
+              const bytes = new TextEncoder().encode(json);
+              // Browser-safe base64url
+              let bin = '';
+              for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+              const b64std = btoa(bin);
+              const b64url = b64std.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+              return b64url;
+            })()
           : '';
         const url = `/api/briefing/stream?domain=${cleanedDomain}` + (b64 ? `&keys=${b64}` : '');
         es = new EventSource(url);
@@ -464,8 +468,8 @@ export default function ExoraPage() {
               headline: n.headline,
               url: n.url,
               source: n.source,
-              publishedDate: new Date().toISOString(),
-              date: new Date().toISOString(),
+              publishedDate: (n as any).publishedDate || new Date().toISOString(),
+              date: (n as any).publishedDate || new Date().toISOString(),
               type: "Other",
             })),
           }))
