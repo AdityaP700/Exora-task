@@ -130,14 +130,14 @@ export async function fetchExaData(
 export async function fetchMentions(domain: string, apiKey: string): Promise<any> {
   const companyName = domain.split('.')[0];
   console.log(`🔍 Fetching mentions for: ${domain}`);
-  
+
   const body = {
     query: `"${domain}" OR "${companyName}"`,
     type: 'neural',
     numResults: 25,
     startPublishedDate: getPastDate(14),
   };
-  
+
   try {
     const result = await exaSearch(apiKey, body);
     if (process.env.VERBOSE_LOGS === 'true') {
@@ -156,16 +156,16 @@ export async function fetchMentions(domain: string, apiKey: string): Promise<any
 export async function fetchSignals(domain: string, apiKey: string): Promise<any> {
   const companyName = domain.split('.')[0];
   console.log(`🎯 Fetching signals for: ${domain}`);
-  
+
   const queries = [
     `"${companyName}" funding OR "${companyName}" raises OR "${companyName}" investment`,
-    `"${companyName}" launches OR "${companyName}" announces OR "${companyName}" releases`, 
+    `"${companyName}" launches OR "${companyName}" announces OR "${companyName}" releases`,
     `"${companyName}" acquires OR "${companyName}" acquisition OR "${companyName}" merger`,
     `"${companyName}" layoffs OR "${companyName}" cuts OR "${companyName}" restructuring`
   ];
 
   const allResults: any[] = [];
-  
+
   // 🔧 FIXED: Sequential processing instead of parallel to avoid rate limits
   for (let i = 0; i < queries.length; i++) {
     try {
@@ -176,31 +176,31 @@ export async function fetchSignals(domain: string, apiKey: string): Promise<any>
         startPublishedDate: getPastDate(90),
         includeDomains: ['techcrunch.com', 'wsj.com', 'bloomberg.com', 'forbes.com', 'businessinsider.com', 'reuters.com']
       });
-      
+
       if (result.results) {
         allResults.push(...result.results);
         console.log(`📈 Query ${i + 1} for ${domain}: ${result.results.length} results`);
       }
-      
+
       // 🔧 FIXED: Add delay between requests (5 requests per second = 200ms between requests)
       if (i < queries.length - 1) {
         await delay(250); // 250ms delay = ~4 requests per second (safely under 5/sec limit)
       }
-      
+
     } catch (error) {
       console.warn(`Signal query ${i + 1} failed for ${domain}:`, error);
       continue; // Continue with next query instead of failing completely
     }
   }
-  
+
   // Remove duplicates and sort
   const uniqueResults = allResults
-    .filter((result, index, self) => 
+    .filter((result, index, self) =>
       result.url && index === self.findIndex(r => r.url === result.url)
     )
     .map(r => ({ ...r, publishedDate: normalizePublishedDate(r.publishedDate || new Date().toISOString()) }))
     .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
-  
+
   if (process.env.VERBOSE_LOGS === 'true') {
     console.log(`🎯 Total signals for ${domain}: ${allResults.length} raw → ${uniqueResults.length} unique`);
   }
@@ -209,7 +209,7 @@ export async function fetchSignals(domain: string, apiKey: string): Promise<any>
 export async function fetchHistoricalData(domain: string, apiKey: string): Promise<{ date: string; mentions: number }[]> {
   const companyName = domain.split('.')[0];
   const datePoints: { date: string; mentions: number }[] = [];
-  
+
   const days = Math.max(1, Math.min(90, parseInt(process.env.HISTORICAL_DAYS || '30')));
   // Create an array of the last N days
   const dates = Array.from({ length: days }, (_, i) => {
@@ -229,7 +229,7 @@ export async function fetchHistoricalData(domain: string, apiKey: string): Promi
       startPublishedDate: date,
       endPublishedDate: nextDay.toISOString().split('T')[0],
     };
-    
+
     try {
       const result = await exaSearch(apiKey, body);
       datePoints.push({ date, mentions: result.results?.length || 0 });
@@ -323,4 +323,70 @@ export async function exaAdHocSearch(apiKey: string, query: string, numResults =
     numResults,
     startPublishedDate: startPublishedDate || getPastDate(30),
   })
+}
+
+/**
+ * Search for founder/leadership information using Exa's web search.
+ * Returns actual web content about founders from reliable sources.
+ */
+export async function searchFounderInfo(
+  domain: string,
+  canonicalName: string | null,
+  apiKey: string
+): Promise<{ results: any[] }> {
+  const brand = canonicalName || domain.split('.')[0];
+  console.log(`👥 Searching for founder info: ${brand} (${domain})`);
+
+  // Trusted sources for company info
+  const trustedSources = [
+    'linkedin.com',
+    'crunchbase.com',
+    'bloomberg.com',
+    'forbes.com',
+    'techcrunch.com',
+    'reuters.com',
+    'wsj.com',
+    'businessinsider.com',
+    'wikipedia.org',
+  ];
+
+  const queries = [
+    `"${brand}" founder CEO`,
+    `"${brand}" co-founder team`,
+    `${domain} leadership team`,
+  ];
+
+  const seen = new Set<string>();
+  const allResults: any[] = [];
+
+  for (const query of queries) {
+    try {
+      await delay(250);
+      const result = await exaSearch(apiKey, {
+        query,
+        type: 'neural',
+        numResults: 5,
+        includeDomains: trustedSources,
+        contents: {
+          text: true,
+          maxCharacters: 2000
+        }
+      });
+
+      if (result.results) {
+        for (const r of result.results) {
+          if (r.url && !seen.has(r.url)) {
+            seen.add(r.url);
+            allResults.push(r);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(`Founder search query failed for ${domain}:`, error);
+      continue;
+    }
+  }
+
+  console.log(`👥 Found ${allResults.length} sources for ${brand} leadership info`);
+  return { results: allResults };
 }

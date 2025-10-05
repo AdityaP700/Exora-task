@@ -6,6 +6,7 @@ import { fetchExaData, fetchHistoricalData } from '@/lib/exa-service';
 import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData, generateEnhancedSentimentAnalysis } from '@/lib/analysis-service';
 import { normalizePublishedDate } from '@/lib/utils';
 import { TRUSTED_SOURCES as TRUSTED_SOURCES_SET, isTrustedSource } from '@/lib/constants';
+import { getCanonicalInfo } from '@/lib/canonical';
 import { BriefingResponse, EventType, CompanyProfile, FounderInfo } from '@/lib/types';
 
 // --- HELPER FUNCTIONS ---
@@ -226,6 +227,12 @@ export async function GET(request: Request) {
       { provider: 'gemini', apiKey: geminiApiKey }
     ];
 
+    // Canonical enrichment to disambiguate brand/entity before any LLM lookups (improves founders accuracy)
+    let canonical: { canonicalName?: string; aliases?: string[]; industryHint?: string } | null = null
+    try {
+      canonical = await getCanonicalInfo(domain, llmProviders)
+    } catch {}
+
     // --- NEW: Layer 2 - The AI Bouncer ---
     const isCompany = await validateDomainIsCompany(domain, groqProviders)
     if (!isCompany) {
@@ -248,7 +255,7 @@ export async function GET(request: Request) {
     const allDomains = [domain, ...competitors];
 
     // --- Step 2: Additional LLM metadata (Company Profile, Founders) ---
-    const profilePrompt = `You are enriching a structured company profile for the domain "${domain}".
+    const profilePrompt = `You are enriching a structured company profile for the domain "${domain}"${canonical?.canonicalName ? ` (canonical: ${canonical.canonicalName}${canonical?.aliases?.length ? `; aliases: ${canonical.aliases.join(', ')}` : ''})` : ''}.
 Return ONLY valid JSON with the following keys (omit or null if genuinely unknown – do NOT hallucinate specifics):
 {
   "name": string,                // Official or widely used brand name
@@ -267,7 +274,16 @@ Rules:
 - If the domain looks like an early-stage startup and no data is known, return minimal safe fields.
 - Never invent precise employee counts – use null if not inferable.
 - If name would just repeat domain verbatim (e.g. "google.com"), strip the TLD -> "Google".`;
-    const foundersPrompt = `Who are the key founders of the company at "${domain}"? Return ONLY a valid JSON array of objects, each with fields: name, linkedin, twitter.`;
+  const foundersPrompt = `Task: Identify founders for the exact company operating at domain: ${domain}${canonical?.canonicalName ? ` (canonical name: ${canonical.canonicalName})` : ''}${canonical?.aliases?.length ? `; known aliases: ${canonical.aliases.join(', ')}` : ''}.
+
+Rules:
+- ONLY include founders or co-founders of this exact company (match the canonical brand, not similarly named orgs or different TLDs).
+- If uncertain or ambiguous, return an empty array [].
+- Return ONLY a JSON array. No prose.
+
+Output JSON schema (array of objects):
+[{ "name": string, "linkedin"?: string|null, "twitter"?: string|null, "role"?: string|null }]
+`;
 
     const companyProfilePromise = safeGenerateJson<CompanyProfile>(profilePrompt, llmProviders)
       .catch(() => ({ name: domain.split('.')[0], domain, description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} } as CompanyProfile))
@@ -312,8 +328,76 @@ Rules:
 
         return merged
       });
-    const founderInfoPromise = safeGenerateJson<FounderInfo[]>(foundersPrompt, llmProviders)
-      .catch(() => []);
+    const founderInfoPromise = (async () => {
+      try {
+        // 1) Web search for founder info using Exa (actual web sources)
+        const { searchFounderInfo } = await import('@/lib/exa-service');
+        const founderSearchResults = await searchFounderInfo(
+          domain,
+          canonical?.canonicalName || null,
+          exaApiKey
+        );
+
+        // 2) Extract founder names from web content using LLM
+        if (founderSearchResults.results.length > 0) {
+          const webContent = founderSearchResults.results
+            .map((r, i) => `Source ${i + 1} (${r.url}):\n${r.text || r.title || ''}`)
+            .join('\n\n');
+
+          const extractPrompt = `Based on these web sources about ${canonical?.canonicalName || domain}, extract ONLY the founders/co-founders and CEO.
+
+Web Sources:
+${webContent}
+
+Rules:
+- Extract ONLY actual founders, co-founders, and current CEO
+- Match names to the exact company: ${canonical?.canonicalName || domain}
+- Include their role (Founder, Co-founder, CEO, etc.)
+- If you find LinkedIn or Twitter URLs in the text, include them
+- Return empty array if no clear founder information found
+
+Return ONLY valid JSON array:
+[{ "name": string, "role": string, "linkedin"?: string, "twitter"?: string }]`;
+
+          const extracted = await safeGenerateJson<FounderInfo[]>(extractPrompt, llmProviders).catch(() => []);
+
+          if (Array.isArray(extracted) && extracted.length > 0) {
+            const cleaned = extracted
+              .map((p: any) => ({
+                name: typeof p?.name === 'string' ? p.name.trim() : '',
+                linkedin: typeof p?.linkedin === 'string' ? p.linkedin : undefined,
+                twitter: typeof p?.twitter === 'string' ? p.twitter : undefined,
+                role: typeof p?.role === 'string' ? p.role : undefined,
+              }))
+              .filter(p => p.name && p.name.length < 120 && p.name.length > 2);
+
+            if (cleaned.length > 0) {
+              return cleaned;
+            }
+          }
+        }
+
+        // 3) Fallback: Try direct LLM if web search found nothing
+        console.log(`⚠️ Web search found no founder info for ${domain}, falling back to LLM`);
+        const fallbackPrompt = `Who are the founders and current CEO of ${canonical?.canonicalName || domain}? Return ONLY JSON array: [{"name": string, "role": string}]`;
+        const fallback = await safeGenerateJson<FounderInfo[]>(fallbackPrompt, llmProviders).catch(() => []);
+
+        if (Array.isArray(fallback) && fallback.length > 0) {
+          return fallback
+            .map((p: any) => ({
+              name: typeof p?.name === 'string' ? p.name.trim() : '',
+              role: typeof p?.role === 'string' ? p.role : 'Founder',
+            }))
+            .filter(p => p.name && p.name.length < 120)
+            .slice(0, 5); // Limit to top 5
+        }
+
+        return [];
+      } catch (error) {
+        console.error('Error fetching founder info:', error);
+        return [];
+      }
+    })();
 
     // --- Step 3: Combined Data Fetch with Historical Data ---
     console.log(`📋 Fetching comprehensive data for domains: ${allDomains.join(', ')}`);
