@@ -29,13 +29,21 @@ export function Navbar() {
   }, []);
   const handleSearchClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    // Try to find a visible AI input textarea
-    const el = document.querySelector<HTMLTextAreaElement>("textarea[placeholder*='company URL']") ||
+    
+    // Try to find the search input element first
+    const searchContainer = document.getElementById('search-input');
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea[placeholder*='company URL']") ||
       document.querySelector<HTMLTextAreaElement>("textarea[placeholder*='another company']") ||
       document.querySelector<HTMLTextAreaElement>("textarea");
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(() => el.focus(), 300);
+    
+    if (searchContainer) {
+      // If we have results showing, scroll to the search input container
+      searchContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => textarea?.focus(), 400);
+    } else {
+      // If no results, scroll to top and focus
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => textarea?.focus(), 400);
     }
   };
   const navItems = [
