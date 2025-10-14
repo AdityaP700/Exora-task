@@ -26,6 +26,7 @@ import type {
   EnhancedSentimentAnalysis,
 } from "@/lib/types";
 import { LoaderFour } from "@/components/ui/loader";
+import { ChevronUp } from "lucide-react";
 
 import { PrimarySentimentCard } from "@/components/primary-sentiment-card";
 import { CompetitorSentimentCard } from "@/components/competitor-sentiment-card";
@@ -113,6 +114,7 @@ export default function ExoraPage() {
   >("overview");
   const [lastQuery, setLastQuery] = useState<string>("");
   const esRef = useRef<EventSource | null>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   // Restore last domain (prompt instead of auto-run)
   const [resumePrompt, setResumePrompt] = useState(false);
@@ -135,6 +137,20 @@ export default function ExoraPage() {
       }
     };
   }, []);
+
+  // Scroll listener for scroll-to-top button
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 300);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Layer 1: Frontend sanity checker for domains (simple and forgiving)
   const looksLikeDomain = (input: string) => {
@@ -160,6 +176,11 @@ export default function ExoraPage() {
     setCompetitorNews([]);
     setBenchmark([]);
     setSummaryText("");
+
+    // If not currently showing results, scroll to top smoothly before starting
+    if (!hasStarted) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 
     try {
       if (!looksLikeDomain(input)) {
@@ -542,9 +563,11 @@ export default function ExoraPage() {
       <div className="relative z-10">
         <Navbar />
 
-  <main className="p-6 pt-10 md:pt-12">
+  <main className="p-6">
+    {/* Add padding-top to account for fixed navbar and ensure scrollable area */}
+    <div className={`${hasStarted ? 'pt-20' : 'pt-16 md:pt-20'}`}>
           {showInlineHero && (
-            <div id="hero-banner" className="mb-12 scroll-mt-24">
+            <div id="hero-banner" className="mb-12 scroll-mt-20">
               <div className="text-center max-w-4xl mx-auto">
                 <h1 className="text-3xl md:text-5xl font-bold text-slate-50 tracking-tight mb-2">
                   Decode <span className="text-slate-300">Any Competitor</span>.
@@ -595,7 +618,7 @@ export default function ExoraPage() {
                 exit={{ opacity: 0 }}
               >
                 <div className="container mx-auto px-4 pt-4">
-                  <div className="w-full max-w-3xl mx-auto mb-4">
+                  <div id="search-input" className="w-full max-w-3xl mx-auto mb-4 scroll-mt-20">
                     <AIInputWithSearch
                       placeholder="Search for another company..."
                       onSubmit={(value) => handleSearch(value)}
@@ -718,7 +741,7 @@ export default function ExoraPage() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="container mx-auto px-4 pt-20 pb-24 text-center flex flex-col items-center">
+                <div className="container mx-auto px-4 pt-12 pb-24 text-center flex flex-col items-center">
                   <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-slate-50 tracking-tight mb-4">
                     <span className="relative inline-block">
                       Decode
@@ -797,7 +820,26 @@ export default function ExoraPage() {
               </motion.div>
             )}
           </AnimatePresence>
+    </div>
         </main>
+
+        {/* Scroll to top button */}
+        <AnimatePresence>
+          {showScrollTop && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={scrollToTop}
+              className="fixed bottom-6 right-6 z-50 w-12 h-12 bg-slate-800/90 hover:bg-slate-700/90 backdrop-blur-sm border border-slate-600/40 rounded-full flex items-center justify-center text-slate-200 hover:text-white shadow-lg transition-colors"
+              aria-label="Scroll to top"
+            >
+              <ChevronUp className="w-5 h-5" />
+            </motion.button>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
