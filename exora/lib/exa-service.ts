@@ -7,8 +7,56 @@ const EXA_API_URL = 'https://api.exa.ai/search';
 // 🔧 FIXED: Add delay function for rate limiting
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Simple in-memory cache for Exa queries (short-lived LRU with TTL)
+const EXA_CACHE_ENABLED = process.env.EXA_CACHE_ENABLED !== 'false'
+const EXA_CACHE_TTL_MS = Number(process.env.EXA_CACHE_TTL_MS || 60_000) // default 60s
+const EXA_CACHE_CAPACITY = Number(process.env.EXA_CACHE_CAPACITY || 500)
+
+interface ExaCacheEntry { value: any; expiresAt: number }
+const exaCache = new Map<string, ExaCacheEntry>()
+
+function makeCacheKey(requestBody: object) {
+  try {
+    // Key by request body only (do not include API keys)
+    return Buffer.from(JSON.stringify(requestBody)).toString('base64')
+  } catch (e) {
+    return String(requestBody)
+  }
+}
+
+function getCache(key: string) {
+  if (!EXA_CACHE_ENABLED) return null
+  const entry = exaCache.get(key)
+  if (!entry) return null
+  if (Date.now() > entry.expiresAt) {
+    exaCache.delete(key)
+    return null
+  }
+  // LRU: move to end
+  exaCache.delete(key)
+  exaCache.set(key, entry)
+  return entry.value
+}
+
+function setCache(key: string, value: any) {
+  if (!EXA_CACHE_ENABLED) return
+  if (exaCache.size >= EXA_CACHE_CAPACITY) {
+    const oldest = exaCache.keys().next().value
+    if (oldest) exaCache.delete(oldest)
+  }
+  exaCache.set(key, { value, expiresAt: Date.now() + EXA_CACHE_TTL_MS })
+}
+
 async function exaSearch(apiKey: string, requestBody: object): Promise<any> {
   return sharedLimiter.schedule(async () => {
+    const cacheKey = makeCacheKey(requestBody)
+    const cached = getCache(cacheKey)
+    if (cached) {
+      if (process.env.VERBOSE_LOGS === 'true') console.log('[exa] cache hit')
+      return cached
+    }
+    if (process.env.VERBOSE_LOGS === 'true') console.log('[exa] cache miss')
+
     try {
       const response = await fetch(EXA_API_URL, {
         method: 'POST',
@@ -26,7 +74,10 @@ async function exaSearch(apiKey: string, requestBody: object): Promise<any> {
         throw new Error(`Exa API request failed with status ${response.status}`);
       }
 
-      return response.json();
+      const json = await response.json();
+      // store in cache for next requests
+      try { setCache(cacheKey, json) } catch (e) {}
+      return json;
     } catch (error) {
       console.error('Failed to fetch from Exa API:', error);
       throw error;
