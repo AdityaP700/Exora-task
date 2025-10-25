@@ -2,7 +2,6 @@
 import { sharedLimiter } from '@/lib/limiter';
 import { normalizePublishedDate } from '@/lib/utils';
 import { TRUSTED_SOURCES, isTrustedSource } from '@/lib/constants';
-import Sentry from '@/lib/sentry'
 
 const EXA_API_URL = 'https://api.exa.ai/search';
 
