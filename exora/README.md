@@ -131,6 +131,25 @@ Canonical inference guides alias filtering, disambiguates homonyms, and drives e
 - No logging of raw keys
 - All enrichment transient per request
 
+## Continuous Integration (CI)
+
+This repository includes a GitHub Actions workflow that runs on push and pull request to enforce quality checks.
+
+- What it runs: dependency install, linter (if present), build/typecheck (if present), and tests (if present).
+- Workflow file: `.github/workflows/ci.yml`.
+
+To run the same checks locally use:
+
+```powershell
+npm ci
+npm run lint    # if present
+npm run build   # if present (often performs TypeScript typechecking)
+npm test        # if present
+```
+
+If any of those scripts are missing the workflow currently uses `--if-present` so CI will not fail solely because a script is not defined. If you'd prefer stricter behavior (fail when scripts are missing), update the workflow to remove `--if-present`.
+
+
 ---
 ## 🖥️ Local Development
 ```bash
@@ -170,3 +189,4 @@ Consider further enhancement with a future compact mode (reduced padding + conde
 ---
 ## �📬 Contact
 For questions or collaboration: open an issue or reach out via GitHub profile.
+
