@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import { sharedLimiter } from '@/lib/limiter';
+import Sentry from '@/lib/sentry'
 
 export type LlmProvider = 'openai' | 'gemini' | 'groq';
 
@@ -24,6 +25,7 @@ async function generateText(
     switch (provider) {
       case 'groq':
         return await sharedLimiter.schedule(async () => {
+          Sentry.addBreadcrumb({ category: 'llm', message: 'calling groq', data: { model } })
           const groq = new Groq({ apiKey });
           const groqResponse = await groq.chat.completions.create({
             messages: [{ role: 'user', content: prompt }],
@@ -34,6 +36,7 @@ async function generateText(
         });
       case 'openai':
         return await sharedLimiter.schedule(async () => {
+          Sentry.addBreadcrumb({ category: 'llm', message: 'calling openai', data: { model } })
           const openai = new OpenAI({ apiKey });
           const openaiResponse = await openai.chat.completions.create({
             messages: [{ role: 'user', content: prompt }],
@@ -45,6 +48,7 @@ async function generateText(
 
       case 'gemini':
         return await sharedLimiter.schedule(async () => {
+          Sentry.addBreadcrumb({ category: 'llm', message: 'calling gemini', data: { model } })
           const genAI = new GoogleGenerativeAI(apiKey);
           const geminiModel = genAI.getGenerativeModel({
             model: model || 'gemini-2.0-flash',
@@ -58,6 +62,17 @@ async function generateText(
         throw new Error(`Unsupported LLM provider: ${provider}`);
     }
   } catch (error: any) {
+    // Capture provider errors with contextual extra data
+    try {
+      Sentry.withScope(scope => {
+        scope.setTag('llmProvider', provider)
+        scope.setExtra('model', model)
+        scope.setExtra('promptSnippet', typeof prompt === 'string' ? prompt.slice(0, 200) : null)
+        Sentry.captureException(error)
+      })
+    } catch (e) {
+      // swallow any Sentry failures
+    }
     console.error(`Error with ${provider}:`, error);
     throw new Error(`Failed to generate text with ${provider}: ${error.message}`);
   }
