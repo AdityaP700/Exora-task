@@ -6,7 +6,7 @@ import { useEffect, useState, Suspense } from 'react';
 
 // Import all your functional components
 import { DashboardHeader } from "../../components/dashboard-header";
-import { AISidekickChat } from "../../components/ai-sidekick-chat";
+// removed AISidekickChat from here; chat will be shown in the Summary section
 import { TrendAnalysisView } from "../../components/trend-analysis-view";
 import { AllInvestorView } from "../../components/all-investor-view";
 
@@ -108,10 +108,11 @@ function BriefingPageContent() {
                   {activeTab === "trend-analysis" && <TrendAnalysisView data={briefingData} />}
                 </div>
                 <div className="lg:col-span-1">
-                  <AISidekickChat data={briefingData.aiSummary} />
+                  {/* Right column reserved for small widgets or details; chat moved to Summary section */}
                 </div>
               </div>
             )}
+            {/* Chat moved into Summary section; floating widget removed */}
           </main>
         </div>
       </div>
