@@ -714,21 +714,22 @@ export default function ExoraPage() {
 
                   {activeView === "summary" && analysisData && (
                     <div className="mt-8">
-                      <SummaryView
-                        data={analysisData.aiSummary}
-                        context={{
-                          domain: analysisData.requestDomain,
-                          description: analysisData.companyProfile.description,
-                          sentiment:
-                            analysisData.benchmarkMatrix?.[0]?.sentimentScore,
-                          competitors: analysisData.benchmarkMatrix
-                            .slice(1)
-                            .map((c) => ({
-                              domain: c.domain,
-                              sentiment: c.sentimentScore,
-                            })),
-                        }}
-                      />
+                          <SummaryView
+                            data={analysisData.aiSummary}
+                            context={{
+                              domain: analysisData.requestDomain,
+                              description: analysisData.companyProfile.description,
+                              sentiment:
+                                analysisData.benchmarkMatrix?.[0]?.sentimentScore,
+                              competitors: analysisData.benchmarkMatrix
+                                .slice(1)
+                                .map((c) => ({
+                                  domain: c.domain,
+                                  sentiment: c.sentimentScore,
+                                })),
+                            }}
+                            briefing={analysisData}
+                          />
                     </div>
                   )}
                 </div>

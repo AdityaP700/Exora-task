@@ -2,11 +2,12 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import type { AiSummaryData, BriefingResponse } from "@/lib/types"
+import { AISidekickChat } from "@/components/ai-sidekick-chat"
 import { Loader2, FileDown, Share2, Sparkles } from "lucide-react"
 
-type Props = { data: AiSummaryData; context?: { domain: string; sentiment?: number; competitors?: { domain: string; sentiment: number }[]; description?: string } }
+type Props = { data: AiSummaryData; briefing?: BriefingResponse; context?: { domain: string; sentiment?: number; competitors?: { domain: string; sentiment: number }[]; description?: string } }
 
-export function SummaryView({ data, context }: Props) {
+export function SummaryView({ data, context, briefing }: Props) {
   const [showExecSummary, setShowExecSummary] = useState(false)
   useEffect(() => {
     const t = setTimeout(() => setShowExecSummary(true), 1200)
@@ -42,7 +43,7 @@ export function SummaryView({ data, context }: Props) {
   const points = data.summary.map(s => normalizeBullet(s)).filter(s => s.length > 2)
 
   return (
-    <div className="bg-slate-900/50 border border-white/5 rounded-xl p-7 backdrop-blur-sm">
+    <div className="bg-slate-900/50 border border-white/5 rounded-xl p-7 backdrop-blur-sm flex flex-col">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
@@ -63,9 +64,9 @@ export function SummaryView({ data, context }: Props) {
       </div>
 
       {/* Content */}
-      <div className="space-y-6">
-        {/* TL;DR Section (restored & enriched) */}
-        <div className="space-y-3">
+      <div className="flex flex-col h-full">
+  {/* TL;DR Section (restored & enriched) */}
+  <div className="space-y-3 flex-none mb-4">
           <h3 className="text-sm font-semibold text-cyan-400">TL;DR</h3>
           <p className="text-slate-300 text-sm leading-relaxed">
             {context?.description || data.groqTlDr || 'Overview not available.'}
@@ -91,11 +92,11 @@ export function SummaryView({ data, context }: Props) {
           )}
         </div>
 
-        {/* Divider */}
-        <div className="border-t border-white/10"></div>
+  {/* Divider */}
+  <div className="border-t border-white/10 flex-none"></div>
 
-        {/* Key Points Section */}
-        <div>
+  {/* Key Points Section */}
+  <div className="flex-none mt-2">
           <h3 className="text-sm font-semibold text-cyan-400 mb-3">Strategic Points</h3>
           {showExecSummary ? (
             <ul className="space-y-2">
@@ -112,6 +113,12 @@ export function SummaryView({ data, context }: Props) {
             </div>
           )}
         </div>
+        {/* Chat: appear after strategic points; occupies the remaining card area */}
+        {showExecSummary && briefing && (
+          <div className="mt-4">
+            <AISidekickChat data={briefing} fullWidth />
+          </div>
+        )}
       </div>
     </div>
   )
