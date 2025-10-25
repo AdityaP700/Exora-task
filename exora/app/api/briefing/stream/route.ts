@@ -7,6 +7,7 @@ import { getCanonicalInfo } from '@/lib/canonical'
 import { getOrGenerateProfileSnapshot } from '@/lib/profile-snapshot'
 import { calculateNarrativeMomentum, calculatePulseIndex, generateSentimentHistoricalData, generateEnhancedSentimentAnalysis } from '@/lib/analysis-service'
 import { normalizePublishedDate } from '@/lib/utils'
+import Sentry, { flush as sentryFlush } from '@/lib/sentry'
 
 // Emit SSE event helper
 function sseChunk(event: string, data: unknown) {
@@ -71,6 +72,7 @@ export async function GET(req: Request) {
   const raw = searchParams.get('domain')
   if (!raw) return NextResponse.json({ error: 'Missing domain' }, { status: 400 })
   const domain = cleanDomain(raw)
+  Sentry.addBreadcrumb({ category: 'sse', message: 'briefing_stream_start', data: { domain } })
   // Dynamic canonical inference structure
   let canonical: { canonicalName: string; aliases: string[]; industryHint?: string; brandTokens?: string[] } | null = null
   const refreshProfile = searchParams.get('refreshProfile') === 'true'
@@ -115,12 +117,18 @@ export async function GET(req: Request) {
       try {
         // Stage 0: Canonical inference (disambiguation & alias surface)
         try {
+          Sentry.addBreadcrumb({ category: 'sse', message: 'canonical_inference_start' })
           canonical = await getCanonicalInfo(domain, llmProviders)
+          Sentry.addBreadcrumb({ category: 'sse', message: 'canonical_inference_done', data: { canonical } })
           send('canonical', { canonical })
-        } catch {}
+        } catch (e) {
+          Sentry.addBreadcrumb({ category: 'sse', message: 'canonical_inference_failed' })
+        }
 
         // Stage 1: Overview (fast LLM TL;DR)
-        const snapshotProfile = await getOrGenerateProfileSnapshot(domain, llmProviders, refreshProfile)
+  Sentry.addBreadcrumb({ category: 'sse', message: 'profile_snapshot_start' })
+  const snapshotProfile = await getOrGenerateProfileSnapshot(domain, llmProviders, refreshProfile)
+  Sentry.addBreadcrumb({ category: 'sse', message: 'profile_snapshot_done' })
         // Attach canonical enrichment: only override if snapshot name looks like raw domain stem or is very short (<4 chars)
         if (canonical) {
           const baseStem = domain.split('.')[0].toLowerCase()
@@ -219,12 +227,24 @@ Return ONLY valid JSON array:
 
       return [];
     } catch (error) {
+      try {
+        Sentry.withScope((scope: any) => {
+          scope.setTag('sse_subtask', 'founders_fetch')
+          scope.setExtra('domain', domain)
+          Sentry.captureException(error)
+        })
+        // flush so short-lived events have a chance to be delivered
+        await sentryFlush(1500)
+      } catch (e) {}
       console.error('Error fetching founder info:', error);
       return [];
     }
   })()
 
-  const profilePromise = safeGenerateJson(profilePrompt, llmProviders).catch(() => ({ name: domain.split('.')[0], description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} }))
+  const profilePromise = safeGenerateJson(profilePrompt, llmProviders).catch((err: any) => {
+    try { Sentry.addBreadcrumb({ category: 'sse', message: 'profile_prompt_failed' }); Sentry.captureException(err) } catch (e) {}
+    return ({ name: domain.split('.')[0], description: `Company at ${domain}`, ipoStatus: 'Unknown', socials: {} })
+  })
 
   const [verifiedFounders, profile] = await Promise.all([foundersPromise, profilePromise])
   // Split founders vs execs for emission
@@ -238,6 +258,7 @@ Return ONLY valid JSON array:
         let mainMentions = await fetchExaData(domain, 'mentions', exaKey, { numResults: 25 })
         // Stage 3: Competitor discovery (LLM) + mentions for main company
   const competitors = await discoverCompetitors(domain, llmProviders)
+    Sentry.addBreadcrumb({ category: 'sse', message: 'competitor_discovery_done', data: { competitors } })
         send('competitors', { competitors })
         // Re-score + disambiguation filter: keep only items referencing aliases unless from trusted source
         const TRUSTED_SOURCES = Array.from(TRUSTED_SOURCES_SET)
@@ -396,8 +417,19 @@ NEWS: ${JSON.stringify(mainTopNews.slice(0,4))}`
 
         // End
         send('done', { ok: true })
+        Sentry.addBreadcrumb({ category: 'sse', message: 'stream_done' })
         controller.close()
       } catch (err: any) {
+        // Capture and flush to improve delivery chance for short-lived processes
+        try {
+          Sentry.withScope((scope: any) => {
+            scope.setTag('route', 'briefing/stream')
+            scope.setExtra('domain', domain)
+            scope.setExtra('llmProviders', llmProviders.map(p => p.provider))
+            Sentry.captureException(err)
+          })
+          await sentryFlush(2000)
+        } catch (e) {}
         send('error', { message: err?.message || 'Unknown error' })
         controller.close()
       }
