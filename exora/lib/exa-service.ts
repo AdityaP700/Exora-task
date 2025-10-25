@@ -2,35 +2,140 @@
 import { sharedLimiter } from '@/lib/limiter';
 import { normalizePublishedDate } from '@/lib/utils';
 import { TRUSTED_SOURCES, isTrustedSource } from '@/lib/constants';
+import Sentry from '@/lib/sentry'
+
 const EXA_API_URL = 'https://api.exa.ai/search';
+
+// Resilience configuration
+const EXA_MAX_RETRIES = Number(process.env.EXA_MAX_RETRIES || 3);
+const EXA_BACKOFF_BASE_MS = Number(process.env.EXA_BACKOFF_BASE_MS || 250); // initial backoff
+const EXA_REQUEST_TIMEOUT_MS = Number(process.env.EXA_REQUEST_TIMEOUT_MS || 5000); // per-request timeout
+
+// Circuit breaker configuration
+const CIRCUIT_THRESHOLD = Number(process.env.EXA_CIRCUIT_THRESHOLD || 5); // failures
+const CIRCUIT_WINDOW_MS = Number(process.env.EXA_CIRCUIT_WINDOW_MS || 60_000); // sliding window
+const CIRCUIT_COOLDOWN_MS = Number(process.env.EXA_CIRCUIT_COOLDOWN_MS || 30_000); // open period
+
+type CircuitState = { failures: number; firstFailureAt: number | null; openedUntil: number | null }
+const circuit: CircuitState = { failures: 0, firstFailureAt: null, openedUntil: null }
+
+const metrics = {
+  exaAttempts: 0,
+  exaFailures: 0,
+  exaRetries: 0,
+}
+
+function isCircuitOpen() {
+  if (circuit.openedUntil && Date.now() < circuit.openedUntil) return true
+  return false
+}
+
+function recordFailure() {
+  metrics.exaFailures++
+  const now = Date.now()
+  if (!circuit.firstFailureAt) circuit.firstFailureAt = now
+  circuit.failures += 1
+  // if window expired, reset
+  if (circuit.firstFailureAt && now - circuit.firstFailureAt > CIRCUIT_WINDOW_MS) {
+    circuit.failures = 1
+    circuit.firstFailureAt = now
+  }
+  if (circuit.failures >= CIRCUIT_THRESHOLD) {
+    circuit.openedUntil = now + CIRCUIT_COOLDOWN_MS
+    Sentry.addBreadcrumb({ category: 'exa', message: 'circuit_opened', data: { openedUntil: circuit.openedUntil } })
+    console.warn('[exa] circuit opened until', new Date(circuit.openedUntil).toISOString())
+  }
+}
+
+function recordSuccess() {
+  // reset circuit
+  circuit.failures = 0
+  circuit.firstFailureAt = null
+  circuit.openedUntil = null
+}
+
+function maskKey(k?: string) {
+  if (!k) return ''
+  return k.length > 6 ? `${k.slice(0,4)}...${k.slice(-2)}` : '****'
+}
+
+async function timeoutFetch(input: RequestInfo, init: RequestInit = {}, timeout = EXA_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeout)
+  try {
+    const res = await fetch(input, { ...init, signal: controller.signal })
+    return res
+  } finally {
+    clearTimeout(id)
+  }
+}
+
+function sleep(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
 // 🔧 FIXED: Add delay function for rate limiting
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function exaSearch(apiKey: string, requestBody: object): Promise<any> {
   return sharedLimiter.schedule(async () => {
-    try {
-      const response = await fetch(EXA_API_URL, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.error('Exa API Error:', errorBody);
-        throw new Error(`Exa API request failed with status ${response.status}`);
-      }
-
-      return response.json();
-    } catch (error) {
-      console.error('Failed to fetch from Exa API:', error);
-      throw error;
+    metrics.exaAttempts++
+    if (isCircuitOpen()) {
+      Sentry.addBreadcrumb({ category: 'exa', message: 'request_blocked_circuit_open' })
+      throw new Error('Exa circuit is open')
     }
+
+    let lastErr: any = null
+    for (let attempt = 0; attempt <= EXA_MAX_RETRIES; attempt++) {
+      if (attempt > 0) metrics.exaRetries++
+      try {
+        // Use timeout fetch
+        const resp = await timeoutFetch(EXA_API_URL, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify(requestBody),
+        }, EXA_REQUEST_TIMEOUT_MS)
+
+        if (!resp.ok) {
+          const errText = await resp.text().catch(()=>'<no-body>')
+          lastErr = new Error(`Exa API ${resp.status}: ${errText}`)
+          Sentry.addBreadcrumb({ category: 'exa', message: 'non_ok_response', data: { status: resp.status } })
+          throw lastErr
+        }
+
+        const json = await resp.json().catch((e) => { throw new Error('Invalid JSON from Exa') })
+
+        // Basic validation
+        if (!json || !Array.isArray(json.results)) {
+          throw new Error('Exa response missing results array')
+        }
+
+        // success
+        recordSuccess()
+        return json
+      } catch (err: any) {
+        lastErr = err
+        recordFailure()
+        // If circuit opened as a result of this failure, break early
+        if (isCircuitOpen()) break
+        // Exponential backoff with jitter
+        const backoff = EXA_BACKOFF_BASE_MS * Math.pow(2, attempt)
+        const jitter = Math.floor(Math.random() * 100)
+        const wait = backoff + jitter
+        if (process.env.VERBOSE_LOGS === 'true') console.warn(`[exa] attempt ${attempt+1} failed, retrying in ${wait}ms:`, maskKey(apiKey))
+        await sleep(wait)
+        continue
+      }
+    }
+    metrics.exaFailures++
+    Sentry.withScope(scope => {
+      scope.setTag('exa','failure')
+      scope.setExtra('requestBody', { ...(requestBody as any) })
+      Sentry.captureException(lastErr)
+    })
+    throw lastErr
   });
 }
 
